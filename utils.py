@@ -16,16 +16,23 @@ def inverse_mobius_transform(z, a):
     """Apply a Mobius transformation to map the origin to z."""
     return (a + z) / (1 + np.conj(a) * z)
 
-def get_arc(z):
+def get_arc(z, n_points=25_000):
     """Compute the geodesic circle through the origin and z."""
-    t = np.linspace(0, 1, 10000)
+    t = np.linspace(0, 1, num=n_points)
     return t * z
 
 def hyperbolic_isometry(z, t):
-    # Example: a rotation by t radians.
+    # a rotation by t radians.
     return np.exp(1j * t) * z
 
 def get_geodesic(z1, z2):
+    """
+    We first apply a Mobius transformation to map z1 to the origin.
+    Then we compute the geodesic circle through the origin and z2, which is on the real line.
+    Finally, we apply the inverse Mobius transformation to map the geodesic back to the original
+    disk
+    """
+
     z2_transformed = mobius_transform(z2, z1)
     geodesic_transformed = get_arc(z2_transformed)
     geodesic_original = inverse_mobius_transform(geodesic_transformed, z1)

@@ -7,62 +7,28 @@
 import sys
 import numpy as np
 from vispy import app, gloo
-
-from utils import *
-
+from utils import get_unit_circle, get_geodesic, circle_inversion
 
 
-
-# Euclidean (left side) vertex shader: Identity mapping.
-vertex_euclid = """
+# Vertex shaders (Euclidean and Hyperbolic share similar code):
+vertex_shader_template = """
 uniform float u_rotation;
-uniform float u_scale;   // New uniform for zooming.
-uniform float u_tilt;    // New uniform for tilting.
+uniform float u_scale;
+uniform float u_tilt;
+uniform vec2 u_translation;  // New translation uniform.
 attribute vec2 a_position;
 void main(void) {
     float c = cos(u_rotation);
     float s = sin(u_rotation);
     mat2 rotation = mat2(c, -s, s, c);
     
-    // Apply scale (zoom)
-    vec2 pos = (a_position * u_scale);
-    
-    // Apply rotation.
-    pos = rotation * pos;
-    
-    // Apply a tilt (simple skew as an example).
+    vec2 pos = rotation * (a_position * u_scale) + u_translation;  // Apply translation.
     pos.y += u_tilt * pos.x;
     
     gl_Position = vec4(pos, 0.0, 1.0);
 }
 """
 
-# Hyperbolic (right side) vertex shader:
-vertex_hyper = """
-uniform float u_rotation;
-uniform float u_scale;   // New uniform for zooming.
-uniform float u_tilt;    // New uniform for tilting.
-attribute vec2 a_position;
-void main(void) {
-    float c = cos(u_rotation);
-    float s = sin(u_rotation);
-    mat2 rotation = mat2(c, -s, s, c);
-    
-    // Apply scale (zoom)
-    vec2 pos = (a_position * u_scale);
-    
-    // Apply rotation.
-    pos = rotation * pos;
-    
-    // Apply a tilt (simple skew as an example).
-    pos.y += u_tilt * pos.x;
-    
-    gl_Position = vec4(pos, 0.0, 1.0);
-}
-"""
-
-
-# Fragment shader: Colors the fragment.
 fragment = """
 uniform vec4 u_color;
 void main(void) {
@@ -75,168 +41,155 @@ void main(void) {
 
 
 
+def transform_vertex(vertex, rotation, scale, tilt, translation):
+    c, s = np.cos(rotation), np.sin(rotation)
+    R = np.array([[c, -s], [s, c]])
+    # Apply scale and rotation
+    transformed = R @ (vertex * scale)
+    # Apply translation
+    transformed += translation
+    # Apply tilt (skew) transformation
+    transformed[1] += tilt * transformed[0]
+    return transformed
+
+
+
 
 
 
 radius = 0.5
 
-
-
-
-
-
 class Canvas(app.Canvas):
     def __init__(self):
-        # Set canvas size to twice as wide.
-        app.Canvas.__init__(self, size=(1200, 600), keys='interactive')
-        
+        super().__init__(size=(1200, 600), keys='interactive')
         # Create shader programs.
-        self.program_euclid = gloo.Program(vertex_euclid, fragment)
-        self.program_hyper = gloo.Program(vertex_hyper, fragment)
+        self.program_euclid = gloo.Program(vertex_shader_template, fragment)
+        self.program_hyper = gloo.Program(vertex_shader_template, fragment)
 
-        # Set clear color.
         gloo.set_clear_color('black')
+        self._init_uniforms()
 
-        self.program_euclid['u_scale'] = 1.0
-        self.program_hyper['u_scale'] = 1.0
-
-        self.tilt = 0.0
-        self.program_euclid['u_tilt'] = self.tilt
-        self.program_hyper['u_tilt'] = self.tilt
-
-        
-        
-        # Set an initial color.
-        init_color = (0.1, 0.8, 0.5, 1.0)
-        self.program_euclid['u_color'] = init_color
-        self.program_hyper['u_color'] = init_color
-        
-
-        # Draw the unit circle in the Poincare disk.
+        # Create unit circle for Poincare disc.
         self.unit_circle = get_unit_circle(scale=radius)
-
-        self.inversions = []
-
         
-        # Generate grid vertices for Euclidean space.
-        n_lines = 11  # Adjust for clarity.
+        # Build Euclidean grid and corresponding hyperbolic geodesics.
+        self.geodesics = self._create_grid_and_geodesics()
+        self.inversions = self._calculate_inversions()
+
+        # Assign initial vertex data.
+        self.program_euclid['a_position'] = self.grid_positions
+        self.rotation = 0.0
+        # New attribute for tilt controlled by drag.
+        self.tilt = 0.0
+        # Store the last mouse position.
+        self._last_mouse_pos = None
+
+        self.timer = app.Timer('auto', connect=self.on_timer, start=True)
+
+    def _init_uniforms(self):
+        """Initializes uniforms common to both shader programs."""
+        init_color = (0/255.0, 255/255.0, 216/255.0, 1.0)
+        for program in (self.program_euclid, self.program_hyper):
+            program['u_scale'] = 1.0
+            program['u_tilt'] = 0.0
+            program['u_rotation'] = 0.0
+            program['u_translation'] = (0.0, 0.0)  # Initial translation.
+            program['u_color'] = init_color
+
+    def _create_grid_and_geodesics(self):
+        """Generates grid positions and computes hyperbolic geodesic segments."""
+        n_lines = 21
         scale = 0.5
         xs = np.linspace(-scale, scale, n_lines)
         ys = np.linspace(-scale, scale, n_lines)
         
         grid_vertices = []
-        
         # Vertical lines.
         for x in xs:
-            grid_vertices.append([x, -scale])
-            grid_vertices.append([x, scale])
-        
+            grid_vertices.extend([[x, -scale], [x, scale]])
         # Horizontal lines.
         for y in ys:
-            grid_vertices.append([-scale, y])
-            grid_vertices.append([scale, y])
+            grid_vertices.extend([[-scale, y], [scale, y]])
         
-        grid_positions = np.array(grid_vertices, dtype=np.float32)
-        self.geodesics = self.calculate_polygon_segments(grid_positions)
-
-        # Calculate inversions.
-        self.inversions = self.calculate_inversions()
-
-        # Assign vertex data.
-        self.program_euclid['a_position'] = grid_positions
-        # self.program_hyper['a_position'] = self.geodesics
-        
-        
-
-        # Initialize common uniforms.
-        self.rotation = 0.0
-        self.program_euclid['u_rotation'] = self.rotation
-        self.program_hyper['u_rotation'] = self.rotation
-
-        # Timer for animation.
-        self.timer = app.Timer('auto', connect=self.on_timer, start=True)
-
-    def calculate_polygon_segments(self, grid_positions):
+        self.grid_positions = np.array(grid_vertices, dtype=np.float32)
         segments = []
-
-        # Each line is defined by two consecutive points.
-        for i in range(0, len(grid_positions), 2):
-            z1 = complex(*grid_positions[i])
-            z2 = complex(*grid_positions[i+1])
-            
-            # Compute the geodesic (a hyperbolic arc) between those endpoints.
+        for i in range(0, len(self.grid_positions), 2):
+            z1 = complex(*self.grid_positions[i])
+            z2 = complex(*self.grid_positions[i+1])
             arc = get_geodesic(z1, z2)
             seg = np.column_stack((arc.real, arc.imag)).astype(np.float32)
-            
-            # Only keep points that are inside the unit disc.
-            norms = np.sqrt(np.sum(seg**2, axis=1))
-            seg_filtered = seg[norms <= radius]
-            
-            segments.append(seg_filtered)
-            # segments.append(seg)
+            norms = np.sqrt(np.sum(seg ** 2, axis=1))
+            segments.append(seg[norms <= radius])
         return segments
-    
-    def calculate_inversions(self):
-        inversions = []
-        for seg in self.geodesics:  # each seg is an array of shape (n,2)
-            for pt in seg:  # iterate over points in the segment
+
+    def _calculate_inversions(self):
+        """Calculates the inversion of each point on the hyperbolic geodesics."""
+        inv_points = []
+        for seg in self.geodesics:
+            for pt in seg:
                 z = complex(pt[0], pt[1])
-                z_inverted = circle_inversion(z, 0, radius)
-                inversions.append((z_inverted.real, z_inverted.imag))
-        return np.array(inversions, dtype=np.float32)
+                z_inv = circle_inversion(z, 0, radius)
+                inv_points.append([z_inv.real, z_inv.imag])
+        return np.array(inv_points, dtype=np.float32)
 
     def on_draw(self, event):
         gloo.clear()
         width, height = self.size
         
-        # Left Half: Euclidean grid.
-        gloo.set_viewport(0, 0, width//2, height)
+        # Draw left side: Euclidean grid.
+        gloo.set_viewport(0, 0, width // 2, height)
         self.program_euclid['u_rotation'] = self.rotation
         self.program_euclid.draw('lines')
         
-        # Right Half: Hyperbolic geodesic grid.
-        gloo.set_viewport(width//2, 0, width//2, height)
+        # Draw right side: Hyperbolic grid and unit circle boundary.
+        gloo.set_viewport(width // 2, 0, width // 2, height)
         self.program_hyper['u_rotation'] = self.rotation
         
-        # Draw each geodesic segment separately.
         for seg in self.geodesics:
             self.program_hyper['a_position'] = seg
             self.program_hyper.draw('line_strip')
         
-        # Draw unit disc boundary.
         self.program_hyper['a_position'] = self.unit_circle
         self.program_hyper['u_color'] = (0.1, 0.1, 0.1, 0.0)
         self.program_hyper.draw('line_strip')
 
-        if self.inversions is not None:
-            self.program_hyper['u_color'] = (1.0, 0.0, 1.0, 1.0)
+        if self.inversions.size:
+            self.program_hyper['u_color'] = (0/255.0, 208/255.0, 255/255.0, 1.0)
             self.program_hyper['a_position'] = self.inversions
             self.program_hyper.draw('points')
-        
-    
-    def on_timer(self, event):
-        # self.rotation += 0.005
-        self.update()
-    
-    
-    def on_mouse_press(self, event):
-        # Change color based on mouse click position.
-        x, y = event.pos
-        width, height = self.size
-        red = x / width
-        green = y / height
-        blue = 0.5
-        new_color = (red, green, blue, 1.0)
-        self.program_euclid['u_color'] = new_color
-        self.program_hyper['u_color'] = new_color
 
-    def on_mouse_drag(self, event):
-        # Use event.delta[1] instead of computing a difference
-        delta_tilt = event.delta[1] / 100.0
-        self.tilt += delta_tilt
-        self.program_euclid['u_tilt'] = self.tilt
-        self.program_hyper['u_tilt'] = self.tilt
-        self.update()
+    def on_mouse_press(self, event):
+        self._last_mouse_pos = event.pos
+        print("Mouse press:", event.pos)
+
+    def on_mouse_move(self, event):
+        # If the left mouse button (button 1) is pressed, treat it as a drag.
+        if event.buttons[0]:
+            if self._last_mouse_pos is None:
+                self._last_mouse_pos = event.pos
+                return
+
+            dx = event.pos[0] - self._last_mouse_pos[0]
+            dy = event.pos[1] - self._last_mouse_pos[1]
+
+            self.rotation += dx * 0.005
+            self.tilt += dy * 0.005
+
+            self.program_euclid['u_tilt'] = self.tilt
+            self.program_hyper['u_tilt'] = self.tilt
+
+            self._last_mouse_pos = event.pos
+
+            print("Mouse move (drag) - dx:", dx, "dy:", dy)
+            print("Rotation:", self.rotation, "Tilt:", self.tilt)
+
+            self.update()
+        else:
+            self._last_mouse_pos = None
+
+    def on_mouse_release(self, event):
+        self._last_mouse_pos = None
+        print("Mouse release")
 
     def on_key_press(self, event):
         if event.text == ' ':
@@ -244,20 +197,20 @@ class Canvas(app.Canvas):
                 self.timer.stop()
             else:
                 self.timer.start()
-
-        if event.key.name == 'Up':
-            self.program_euclid['u_scale'] *= 1.1
-            self.program_hyper['u_scale'] *= 1.1
+        elif event.key.name == 'Up':
+            for program in (self.program_euclid, self.program_hyper):
+                program['u_scale'] *= 1.1
             self.update()
-
-        if event.key.name == 'Down':
-            self.program_euclid['u_scale'] /= 1.1
-            self.program_hyper['u_scale'] /= 1.1
+        elif event.key.name == 'Down':
+            for program in (self.program_euclid, self.program_hyper):
+                program['u_scale'] /= 1.1
             self.update()
-
-        if event.text == 'Q':
+        elif event.text.upper() == 'Q':
             self.close()
 
+    def on_timer(self, event):
+        self.rotation += 0.005
+        self.update()
 
 if __name__ == '__main__' and sys.flags.interactive == 0:
     canvas = Canvas()
