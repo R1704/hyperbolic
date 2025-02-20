@@ -26,6 +26,10 @@ def get_arc(z):
     t = np.linspace(0, 1, 1000)
     return t * z
 
+def hyperbolic_isometry(z, t):
+    # Example: a rotation by t radians.
+    return np.exp(1j * t) * z
+
 def get_geodesic(z1, z2):
     z2_transformed = mobius_transform(z2, z1)
     geodesic_transformed = get_arc(z2_transformed)
@@ -61,6 +65,10 @@ class Canvas(app.Canvas):
         self.active_point_index = None  # Track point being dragged.
 
         self.program['u_color'] = (1.0, 1.0, 1.0, 1.0)
+
+        # Start the timer for dynamic updates.
+        self.t = 0
+        self._timer = app.Timer('auto', connect=self.on_timer, start=True)
 
     def on_draw(self, event):
         gloo.clear()
@@ -111,18 +119,14 @@ class Canvas(app.Canvas):
 
         # If not clicking near a point, add a new point.
         if self.active_point_index is None:
-            if len(self.points) == 2:
-                self.points = []
-                self.geodesic = None
+            # if len(self.points) == 2:
+            #     self.points = []
+            #     self.geodesic = None
             self.points.append((x, y))
             self.active_point_index = len(self.points) - 1
         
-        # Update geodesic if two points exist.
-        if len(self.points) == 2:
-            (x1, y1), (x2, y2) = self.points
-            z1, z2 = complex(x1, y1), complex(x2, y2)
-            geodesic = get_geodesic(z1, z2)
-            self.geodesic = np.column_stack((geodesic.real, geodesic.imag)).astype(np.float32)
+        # Update geodesic
+        self.geodesic = self.calculate_polygon_segments()
         self.update()
     
     def on_mouse_move(self, event):
@@ -132,16 +136,35 @@ class Canvas(app.Canvas):
             x = (event.pos[0] / width) * 2 - 1
             y = 1 - (event.pos[1] / height) * 2  # Flip y axis.
             self.points[self.active_point_index] = (x, y)
-            if len(self.points) == 2:
-                (x1, y1), (x2, y2) = self.points
-                z1, z2 = complex(x1, y1), complex(x2, y2)
-                geodesic = get_geodesic(z1, z2)
-                self.geodesic = np.column_stack((geodesic.real, geodesic.imag)).astype(np.float32)
+            if len(self.points) >= 2:
+                self.geodesic = self.calculate_polygon_segments()
+
             self.update()
+
+    def calculate_polygon_segments(self):
+        polygon_segments = []
+        for i in range(len(self.points)):
+            j = (i + 1) % len(self.points)  # Wrap-around for closed polygon.
+            z1 = complex(*self.points[i])
+            z2 = complex(*self.points[j])
+            segment = get_geodesic(z1, z2)
+            polygon_segments.append(np.column_stack((segment.real, segment.imag)).astype(np.float32))
+        return np.concatenate(polygon_segments, axis=0)
 
     def on_mouse_release(self, event):
         # Reset active point when mouse is released.
         self.active_point_index = None
+
+    def on_timer(self, event):
+        self.t = event.dt * 0.1  # Use elapsed time as parameter.
+        transformed_points = []
+        for pt in self.points:
+            z = complex(*pt)
+            z_transformed = hyperbolic_isometry(z, self.t)
+            transformed_points.append((z_transformed.real, z_transformed.imag))
+        self.points = transformed_points
+        self.geodesic = self.calculate_polygon_segments()
+        self.update()
         
 if __name__ == '__main__' and sys.flags.interactive == 0:
     canvas = Canvas()
