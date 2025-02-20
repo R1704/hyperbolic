@@ -1,108 +1,118 @@
+# -*- coding: utf-8 -*-
+# -----------------------------------------------------------------------------
+# Copyright (c) Vispy Development Team. All Rights Reserved.
+# Distributed under the (new) BSD License. See LICENSE.txt for more info.
+# -----------------------------------------------------------------------------
+# Author: Nicolas P .Rougier
+# Date:   04/03/2014
+# -----------------------------------------------------------------------------
+"""
+Show a rotating cube with an outline
+====================================
+"""
+
 import numpy as np
-from vispy import app, gloo
-import math
 
-# Define cube vertices.
-cube_vertices = np.array([
-    [-1, -1, -1],
-    [ 1, -1, -1],
-    [ 1,  1, -1],
-    [-1,  1, -1],
-    [-1, -1,  1],
-    [ 1, -1,  1],
-    [ 1,  1,  1],
-    [-1,  1,  1]
-], dtype=np.float32)
+from vispy import gloo, app
+from vispy.gloo import Program, VertexBuffer, IndexBuffer
+from vispy.util.transforms import perspective, translate, rotate
+from vispy.geometry import create_cube
 
-# Define faces (as indices for triangles) -- not shown for brevity.
-
-def spherify_vertex(v):
-    x, y, z = v
-    x2, y2, z2 = x*x, y*y, z*z
-    factor_x = np.sqrt(1 - (y2/2) - (z2/2) + (y2*z2/3))
-    factor_y = np.sqrt(1 - (z2/2) - (x2/2) + (z2*x2/3))
-    factor_z = np.sqrt(1 - (x2/2) - (y2/2) + (x2*y2/3))
-    return np.array([x * factor_x, y * factor_y, z * factor_z], dtype=np.float32)
-
-def morph_vertex(v, alpha):
-    v_sphere = spherify_vertex(v)
-    return (1 - alpha) * v + alpha * v_sphere
-
-# Write vertex/fragment shaders for 3D.
-vertex_shader = """
+vertex = """
 uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
-attribute vec3 a_position;
-void main(void) {
-    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
-}
-"""
-fragment_shader = """
 uniform vec4 u_color;
-void main(void) {
-    gl_FragColor = u_color;
+
+attribute vec3 position;
+attribute vec2 texcoord;
+attribute vec3 normal;
+attribute vec4 color;
+
+varying vec4 v_color;
+void main()
+{
+    v_color = u_color * color;
+    gl_Position = u_projection * u_view * u_model * vec4(position,1.0);
 }
 """
 
+fragment = """
+varying vec4 v_color;
+void main()
+{
+    gl_FragColor = v_color;
+}
+"""
+
+
 class Canvas(app.Canvas):
     def __init__(self):
-        app.Canvas.__init__(self, size=(1200, 600), keys='interactive')
-        # Create two programs: one for the left (Euclidean) and one for the right (hyperbolic)
-        self.program_euclid = gloo.Program(vertex_shader, fragment_shader)
-        self.program_hyper = gloo.Program(vertex_shader, fragment_shader)
-        
-        # Initialize the cube (and later morph it)
-        self.cube = cube_vertices  # For simplicity; you’d usually have an indexed mesh.
-        
-        self.alpha = 0.0
-        self.time = 0.0
-        
-        # Set up camera matrices (you need to compute model, view, projection matrices)
-        # For Euclidean view:
-        self.proj_euclid = ...  # e.g., perspective projection matrix.
-        self.view_euclid = ...  # e.g., lookat matrix.
-        # For hyperbolic view:
-        self.proj_hyper = ...  # Might be similar, but with a scaling to mimic the Poincaré ball.
-        self.view_hyper = ...  # Adjusted view for hyperbolic space.
-        
-        self.program_euclid['u_color'] = (0.1, 0.8, 0.5, 1.0)
-        self.program_hyper['u_color'] = (0.1, 0.8, 0.5, 1.0)
-        
-        self.timer = app.Timer('auto', connect=self.on_timer, start=True)
-        
+        app.Canvas.__init__(self, size=(512, 512), title='Rotating cube',
+                            keys='interactive')
+        self.timer = app.Timer('auto', self.on_timer)
+
+        # Build cube data
+        V, I, outline = create_cube()
+        vertices = VertexBuffer(V)
+        self.faces = IndexBuffer(I)
+        self.outline = IndexBuffer(outline)
+
+        # Build program
+        # --------------------------------------
+        self.program = Program(vertex, fragment)
+        self.program.bind(vertices)
+
+        # Build view, model, projection & normal
+        # --------------------------------------
+        view = translate((0, 0, -5))
+        model = np.eye(4, dtype=np.float32)
+
+        self.program['u_model'] = model
+        self.program['u_view'] = view
+        self.phi, self.theta = 0, 0
+
+        self.activate_zoom()
+
+        # OpenGL initialization
+        # --------------------------------------
+        gloo.set_state(clear_color=(0.30, 0.30, 0.35, 1.00), depth_test=True,
+                       polygon_offset=(1, 1), line_width=0.75,
+                       blend_func=('src_alpha', 'one_minus_src_alpha'))
+        self.timer.start()
+
+        self.show()
+
     def on_draw(self, event):
-        gloo.clear()
-        width, height = self.size
-        
-        # Compute the current vertex positions via morphing.
-        alpha = 0.5 * (1 + math.sin(self.time))
-        morphed_vertices = np.array([morph_vertex(v, alpha) for v in self.cube])
-        
-        # Set up model matrix, etc.
-        model = ...  # Possibly identity or a rotation.
-        
-        # Left viewport: Euclidean view.
-        gloo.set_viewport(0, 0, width//2, height)
-        self.program_euclid['u_model'] = model
-        self.program_euclid['u_view'] = self.view_euclid
-        self.program_euclid['u_projection'] = self.proj_euclid
-        self.program_euclid['a_position'] = morphed_vertices
-        self.program_euclid.draw('points')  # or draw triangles for faces.
-        
-        # Right viewport: Hyperbolic view.
-        gloo.set_viewport(width//2, 0, width//2, height)
-        self.program_hyper['u_model'] = model
-        self.program_hyper['u_view'] = self.view_hyper
-        self.program_hyper['u_projection'] = self.proj_hyper
-        self.program_hyper['a_position'] = morphed_vertices  # Assume they lie in the unit ball.
-        self.program_hyper.draw('points')
-    
+        gloo.clear(color=True, depth=True)
+
+        # Filled cube
+        gloo.set_state(blend=False, depth_test=True, polygon_offset_fill=True)
+        self.program['u_color'] = 1, 1, 1, 1
+        self.program.draw('triangles', self.faces)
+
+        # Outlined cube
+        gloo.set_state(blend=True, depth_mask=False, polygon_offset_fill=False)
+        self.program['u_color'] = 0, 0, 0, 1
+        self.program.draw('lines', self.outline)
+        gloo.set_state(depth_mask=True)
+
+    def on_resize(self, event):
+        self.activate_zoom()
+
+    def activate_zoom(self):
+        gloo.set_viewport(0, 0, *self.physical_size)
+        projection = perspective(45.0, self.size[0] / float(self.size[1]),
+                                 2.0, 10.0)
+        self.program['u_projection'] = projection
+
     def on_timer(self, event):
-        self.time += event.dt
+        self.theta += .5
+        self.phi += .5
+        self.program['u_model'] = np.dot(rotate(self.theta, (0, 0, 1)),
+                                         rotate(self.phi, (0, 1, 0)))
         self.update()
-        
+
 if __name__ == '__main__':
-    canvas = Canvas()
-    canvas.show()
+    c = Canvas()
     app.run()

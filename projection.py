@@ -1,62 +1,38 @@
 # TODO: smoother grid lines, better inversion visualization
-# TODO: zoom in/out, pan, etc.
+# TODO: zoom in/out, pan, tilt, etc.
 # TODO: better color selection
+# TODO: wave function visualization
 
 
 import sys
 import numpy as np
 from vispy import app, gloo
 
+from utils import *
 
-radius = 0.5
-
-# Define some helper functions for the Poincare disk model.
-def get_unit_circle(n_segments=100, scale=radius):
-    theta = np.linspace(0, 2*np.pi, n_segments, endpoint=True)
-    unit_circle = np.column_stack((np.cos(theta), np.sin(theta))).astype(np.float32) * scale
-    unit_circle = np.concatenate([unit_circle, unit_circle[0:1]], axis=0)
-    return unit_circle
-
-def mobius_transform(z, a):
-    """Apply a Mobius transformation to map z to the origin."""
-    return (z - a) / (1 - np.conj(a) * z)
-
-def inverse_mobius_transform(z, a):
-    """Apply a Mobius transformation to map the origin to z."""
-    return (a + z) / (1 + np.conj(a) * z)
-
-def get_arc(z):
-    """Compute the geodesic circle through the origin and z."""
-    t = np.linspace(0, 1, 10000)
-    return t * z
-
-def hyperbolic_isometry(z, t):
-    # Example: a rotation by t radians.
-    return np.exp(1j * t) * z
-
-def get_geodesic(z1, z2):
-    z2_transformed = mobius_transform(z2, z1)
-    geodesic_transformed = get_arc(z2_transformed)
-    geodesic_original = inverse_mobius_transform(geodesic_transformed, z1)
-    return geodesic_original
-
-def distance(z1, z2):
-    return np.arccosh(1 + 2 * abs(z1 - z2)**2 / ((1 - abs(z1)**2) * (1 - abs(z2)**2)))
-
-def circle_inversion(z, c, R):
-    return c + (R**2) / (np.conj(z - c))
 
 
 
 # Euclidean (left side) vertex shader: Identity mapping.
 vertex_euclid = """
 uniform float u_rotation;
+uniform float u_scale;   // New uniform for zooming.
+uniform float u_tilt;    // New uniform for tilting.
 attribute vec2 a_position;
 void main(void) {
     float c = cos(u_rotation);
     float s = sin(u_rotation);
     mat2 rotation = mat2(c, -s, s, c);
-    vec2 pos = rotation * a_position;
+    
+    // Apply scale (zoom)
+    vec2 pos = (a_position * u_scale);
+    
+    // Apply rotation.
+    pos = rotation * pos;
+    
+    // Apply a tilt (simple skew as an example).
+    pos.y += u_tilt * pos.x;
+    
     gl_Position = vec4(pos, 0.0, 1.0);
 }
 """
@@ -64,15 +40,27 @@ void main(void) {
 # Hyperbolic (right side) vertex shader:
 vertex_hyper = """
 uniform float u_rotation;
+uniform float u_scale;   // New uniform for zooming.
+uniform float u_tilt;    // New uniform for tilting.
 attribute vec2 a_position;
 void main(void) {
     float c = cos(u_rotation);
     float s = sin(u_rotation);
     mat2 rotation = mat2(c, -s, s, c);
-    vec2 pos = rotation * a_position;
+    
+    // Apply scale (zoom)
+    vec2 pos = (a_position * u_scale);
+    
+    // Apply rotation.
+    pos = rotation * pos;
+    
+    // Apply a tilt (simple skew as an example).
+    pos.y += u_tilt * pos.x;
+    
     gl_Position = vec4(pos, 0.0, 1.0);
 }
 """
+
 
 # Fragment shader: Colors the fragment.
 fragment = """
@@ -81,6 +69,21 @@ void main(void) {
     gl_FragColor = u_color;
 }
 """
+
+
+
+
+
+
+
+
+
+radius = 0.5
+
+
+
+
+
 
 class Canvas(app.Canvas):
     def __init__(self):
@@ -93,6 +96,14 @@ class Canvas(app.Canvas):
 
         # Set clear color.
         gloo.set_clear_color('black')
+
+        self.program_euclid['u_scale'] = 1.0
+        self.program_hyper['u_scale'] = 1.0
+
+        self.tilt = 0.0
+        self.program_euclid['u_tilt'] = self.tilt
+        self.program_hyper['u_tilt'] = self.tilt
+
         
         
         # Set an initial color.
@@ -102,7 +113,7 @@ class Canvas(app.Canvas):
         
 
         # Draw the unit circle in the Poincare disk.
-        self.unit_circle = get_unit_circle()
+        self.unit_circle = get_unit_circle(scale=radius)
 
         self.inversions = []
 
@@ -112,6 +123,7 @@ class Canvas(app.Canvas):
         scale = 0.5
         xs = np.linspace(-scale, scale, n_lines)
         ys = np.linspace(-scale, scale, n_lines)
+        
         grid_vertices = []
         
         # Vertical lines.
@@ -203,7 +215,7 @@ class Canvas(app.Canvas):
         
     
     def on_timer(self, event):
-        self.rotation += 0.005
+        # self.rotation += 0.005
         self.update()
     
     
@@ -217,6 +229,34 @@ class Canvas(app.Canvas):
         new_color = (red, green, blue, 1.0)
         self.program_euclid['u_color'] = new_color
         self.program_hyper['u_color'] = new_color
+
+    def on_mouse_drag(self, event):
+        # Use event.delta[1] instead of computing a difference
+        delta_tilt = event.delta[1] / 100.0
+        self.tilt += delta_tilt
+        self.program_euclid['u_tilt'] = self.tilt
+        self.program_hyper['u_tilt'] = self.tilt
+        self.update()
+
+    def on_key_press(self, event):
+        if event.text == ' ':
+            if self.timer.running:
+                self.timer.stop()
+            else:
+                self.timer.start()
+
+        if event.key.name == 'Up':
+            self.program_euclid['u_scale'] *= 1.1
+            self.program_hyper['u_scale'] *= 1.1
+            self.update()
+
+        if event.key.name == 'Down':
+            self.program_euclid['u_scale'] /= 1.1
+            self.program_hyper['u_scale'] /= 1.1
+            self.update()
+
+        if event.text == 'Q':
+            self.close()
 
 
 if __name__ == '__main__' and sys.flags.interactive == 0:
