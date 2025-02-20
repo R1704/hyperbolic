@@ -7,6 +7,9 @@ except ImportError:
     QtGui, QtCore = None, None
 
 
+
+
+# Define some helper functions for the Poincare disk model.
 def get_unit_circle(n_segments=100):
     theta = np.linspace(0, 2*np.pi, n_segments, endpoint=True)
     unit_circle = np.column_stack((np.cos(theta), np.sin(theta))).astype(np.float32) * 0.5
@@ -39,6 +42,12 @@ def get_geodesic(z1, z2):
 def distance(z1, z2):
     return np.arccosh(1 + 2 * abs(z1 - z2)**2 / ((1 - abs(z1)**2) * (1 - abs(z2)**2)))
 
+def circle_inversion(z, c, R):
+    return c + (R**2) / (np.conj(z - c))
+
+
+
+# Define the vertex and fragment shaders.
 vertex = """
 attribute vec2 a_position;
 void main(void) {
@@ -54,6 +63,9 @@ void main(void) {
 }
 """
 
+
+
+# Define the canvas class.
 class Canvas(app.Canvas):
     def __init__(self):
         app.Canvas.__init__(self, title='Poincare Disk', size=(800, 800), keys='interactive')
@@ -62,6 +74,7 @@ class Canvas(app.Canvas):
         self.unit_circle = get_unit_circle()
         self.points = []          # Store clicked endpoints.
         self.geodesic = None      # Geodesic arc between two points.
+        self.inversions = []      # Store inverted points.
         self.active_point_index = None  # Track point being dragged.
 
         self.program['u_color'] = (1.0, 1.0, 1.0, 1.0)
@@ -82,6 +95,12 @@ class Canvas(app.Canvas):
             self.program['u_color'] = (1.0, 0.0, 0.0, 1.0)
             self.program['a_position'] = self.geodesic
             self.program.draw('line_strip')
+
+        # Draw the inverted points (displayed in blue).
+        if self.inversions is not None:
+            self.program['u_color'] = (0.0, 0.0, 1.0, 1.0)
+            self.program['a_position'] = self.inversions
+            self.program.draw('points')
         
         # Draw the clicked points (displayed in green).
         if self.points:
@@ -91,6 +110,9 @@ class Canvas(app.Canvas):
             self.program.draw('points')
         
         # If two points exist, compute and display the hyperbolic distance.
+        self.display_distance_between_points()
+
+    def display_distance_between_points(self):
         if len(self.points) == 2 and QtGui is not None:
             (x1, y1), (x2, y2) = self.points
             d = distance(complex(x1, y1), complex(x2, y2))
@@ -119,15 +141,25 @@ class Canvas(app.Canvas):
 
         # If not clicking near a point, add a new point.
         if self.active_point_index is None:
-            # if len(self.points) == 2:
-            #     self.points = []
-            #     self.geodesic = None
             self.points.append((x, y))
             self.active_point_index = len(self.points) - 1
         
         # Update geodesic
         self.geodesic = self.calculate_polygon_segments()
+        
+        # Inversions
+        self.inversions = self.calculate_inversions()
+        
         self.update()
+
+    def calculate_inversions(self):
+        inversions = []
+        for p in self.geodesic:
+            z = complex(*p)
+            z_inverted = circle_inversion(z, 0, 0.5)
+            inversions.append((z_inverted.real, z_inverted.imag))
+        inversions = np.array(inversions, dtype=np.float32)
+        return inversions
     
     def on_mouse_move(self, event):
         # Only update if a point is active.
@@ -164,6 +196,7 @@ class Canvas(app.Canvas):
             transformed_points.append((z_transformed.real, z_transformed.imag))
         self.points = transformed_points
         self.geodesic = self.calculate_polygon_segments()
+        self.inversions = self.calculate_inversions()
         self.update()
         
 if __name__ == '__main__' and sys.flags.interactive == 0:
