@@ -1,65 +1,44 @@
-import sys
 import numpy as np
 from vispy import app, gloo
+import math
 
-def mobius_transform(z, a):
-    """Map z such that point a goes to 0."""
-    return (z - a) / (1 - np.conj(a) * z)
+# Define cube vertices.
+cube_vertices = np.array([
+    [-1, -1, -1],
+    [ 1, -1, -1],
+    [ 1,  1, -1],
+    [-1,  1, -1],
+    [-1, -1,  1],
+    [ 1, -1,  1],
+    [ 1,  1,  1],
+    [-1,  1,  1]
+], dtype=np.float32)
 
-def inverse_mobius_transform(z, a):
-    """Invert the Mobius transformation that sends a to 0."""
-    return (a + z) / (1 + np.conj(a) * z)
+# Define faces (as indices for triangles) -- not shown for brevity.
 
-def compute_geodesic(x1, y1, x2, y2, n_samples=50):
-    """Compute points along the hyperbolic geodesic between (x1, y1) and (x2, y2)
-    using the Mobius transform approach.
-    If the endpoints are collinear with the origin (or one is at 0), a straight line is returned.
-    """
-    z1, z2 = complex(x1, y1), complex(x2, y2)
-    
-    # If z1 is nearly 0 or both points lie along the same ray, return a straight Euclidean segment.
-    # if abs(z1) < 1e-6 or abs(np.angle(z2) - np.angle(z1)) < 1e-6:
-    #     return np.linspace([x1, y1], [x2, y2], n_samples)
-    
-    # Apply Mobius transform to send z1 to 0.
-    z2_transformed = mobius_transform(z2, z1)
-    
-    # In the transformed domain, the geodesic is the straight line (radial segment) from 0 to z2_transformed.
-    t = np.linspace(0, 1, n_samples)
-    geodesic_transformed = t * z2_transformed
-    
-    # Map back to the original disk.
-    geodesic_original = inverse_mobius_transform(geodesic_transformed, z1)
-    return np.column_stack((geodesic_original.real, geodesic_original.imag))
+def spherify_vertex(v):
+    x, y, z = v
+    x2, y2, z2 = x*x, y*y, z*z
+    factor_x = np.sqrt(1 - (y2/2) - (z2/2) + (y2*z2/3))
+    factor_y = np.sqrt(1 - (z2/2) - (x2/2) + (z2*x2/3))
+    factor_z = np.sqrt(1 - (x2/2) - (y2/2) + (x2*y2/3))
+    return np.array([x * factor_x, y * factor_y, z * factor_z], dtype=np.float32)
 
-# Euclidean (left side) vertex shader: Identity mapping.
-vertex_euclid = """
-uniform float u_rotation;
-attribute vec2 a_position;
+def morph_vertex(v, alpha):
+    v_sphere = spherify_vertex(v)
+    return (1 - alpha) * v + alpha * v_sphere
+
+# Write vertex/fragment shaders for 3D.
+vertex_shader = """
+uniform mat4 u_model;
+uniform mat4 u_view;
+uniform mat4 u_projection;
+attribute vec3 a_position;
 void main(void) {
-    float c = cos(u_rotation);
-    float s = sin(u_rotation);
-    mat2 rotation = mat2(c, -s, s, c);
-    vec2 pos = rotation * a_position;
-    gl_Position = vec4(pos, 0.0, 1.0);
+    gl_Position = u_projection * u_view * u_model * vec4(a_position, 1.0);
 }
 """
-
-# Hyperbolic (right side) vertex shader:
-vertex_hyper = """
-uniform float u_rotation;
-attribute vec2 a_position;
-void main(void) {
-    float c = cos(u_rotation);
-    float s = sin(u_rotation);
-    mat2 rotation = mat2(c, -s, s, c);
-    vec2 pos = rotation * a_position;
-    gl_Position = vec4(pos, 0.0, 1.0);
-}
-"""
-
-# Fragment shader: Colors the fragment.
-fragment = """
+fragment_shader = """
 uniform vec4 u_color;
 void main(void) {
     gl_FragColor = u_color;
@@ -68,95 +47,62 @@ void main(void) {
 
 class Canvas(app.Canvas):
     def __init__(self):
-        # Set canvas size to twice as wide.
         app.Canvas.__init__(self, size=(1200, 600), keys='interactive')
+        # Create two programs: one for the left (Euclidean) and one for the right (hyperbolic)
+        self.program_euclid = gloo.Program(vertex_shader, fragment_shader)
+        self.program_hyper = gloo.Program(vertex_shader, fragment_shader)
         
-        # Create shader programs.
-        self.program_euclid = gloo.Program(vertex_euclid, fragment)
-        self.program_hyper = gloo.Program(vertex_hyper, fragment)
+        # Initialize the cube (and later morph it)
+        self.cube = cube_vertices  # For simplicity; you’d usually have an indexed mesh.
         
-        # Generate grid vertices for Euclidean space.
-        n_lines = 201  # Adjust for clarity.
-        xs = np.linspace(-1, 1, n_lines)
-        ys = np.linspace(-1, 1, n_lines)
-        grid_vertices = []
+        self.alpha = 0.0
+        self.time = 0.0
         
-        # Vertical lines.
-        for x in xs:
-            grid_vertices.append([x, -1])
-            grid_vertices.append([x, 1])
+        # Set up camera matrices (you need to compute model, view, projection matrices)
+        # For Euclidean view:
+        self.proj_euclid = ...  # e.g., perspective projection matrix.
+        self.view_euclid = ...  # e.g., lookat matrix.
+        # For hyperbolic view:
+        self.proj_hyper = ...  # Might be similar, but with a scaling to mimic the Poincaré ball.
+        self.view_hyper = ...  # Adjusted view for hyperbolic space.
         
-        # Horizontal lines.
-        for y in ys:
-            grid_vertices.append([-1, y])
-            grid_vertices.append([1, y])
+        self.program_euclid['u_color'] = (0.1, 0.8, 0.5, 1.0)
+        self.program_hyper['u_color'] = (0.1, 0.8, 0.5, 1.0)
         
-        grid_positions = np.array(grid_vertices, dtype=np.float32)
-        
-        # Compute hyperbolic geodesics using the Mobius transform.
-        hyp_geodesics = []
-        for i in range(0, len(grid_positions), 2):
-            x1, y1 = grid_positions[i]
-            x2, y2 = grid_positions[i+1]
-            geodesic_points = compute_geodesic(x1, y1, x2, y2, n_samples=100)
-            hyp_geodesics.extend(geodesic_points)
-        
-        hyp_positions = np.array(hyp_geodesics, dtype=np.float32)
-
-        # Assign vertex data.
-        self.program_euclid['a_position'] = grid_positions
-        self.program_hyper['a_position'] = hyp_positions
-        
-        # Set clear color.
-        gloo.set_clear_color('black')
-        
-        # Initialize common uniforms.
-        self.rotation = 0.0
-        self.program_euclid['u_rotation'] = self.rotation
-        self.program_hyper['u_rotation'] = self.rotation
-        
-        # Set an initial color.
-        init_color = (0.1, 0.8, 0.5, 1.0)
-        self.program_euclid['u_color'] = init_color
-        self.program_hyper['u_color'] = init_color
-        
-        # Timer for animation.
         self.timer = app.Timer('auto', connect=self.on_timer, start=True)
-
+        
     def on_draw(self, event):
         gloo.clear()
         width, height = self.size
         
-        # Left Half: Euclidean grid.
-        gloo.set_viewport(0, 0, width//2, height)
-        self.program_euclid['u_rotation'] = self.rotation
-        self.program_euclid.draw('lines')
+        # Compute the current vertex positions via morphing.
+        alpha = 0.5 * (1 + math.sin(self.time))
+        morphed_vertices = np.array([morph_vertex(v, alpha) for v in self.cube])
         
-        # Right Half: Hyperbolic geodesic grid.
+        # Set up model matrix, etc.
+        model = ...  # Possibly identity or a rotation.
+        
+        # Left viewport: Euclidean view.
+        gloo.set_viewport(0, 0, width//2, height)
+        self.program_euclid['u_model'] = model
+        self.program_euclid['u_view'] = self.view_euclid
+        self.program_euclid['u_projection'] = self.proj_euclid
+        self.program_euclid['a_position'] = morphed_vertices
+        self.program_euclid.draw('points')  # or draw triangles for faces.
+        
+        # Right viewport: Hyperbolic view.
         gloo.set_viewport(width//2, 0, width//2, height)
-        self.program_hyper['u_rotation'] = self.rotation
-        self.program_hyper.draw('lines')
+        self.program_hyper['u_model'] = model
+        self.program_hyper['u_view'] = self.view_hyper
+        self.program_hyper['u_projection'] = self.proj_hyper
+        self.program_hyper['a_position'] = morphed_vertices  # Assume they lie in the unit ball.
+        self.program_hyper.draw('points')
     
     def on_timer(self, event):
-        self.rotation += 0.005
+        self.time += event.dt
         self.update()
-    
-    def on_key_press(self, event):
-        if event.key == 'Escape':
-            self.close()
-    
-    def on_mouse_press(self, event):
-        # Change color based on mouse click position.
-        x, y = event.pos
-        width, height = self.size
-        red = x / width
-        green = y / height
-        blue = 0.5
-        new_color = (red, green, blue, 1.0)
-        self.program_euclid['u_color'] = new_color
-        self.program_hyper['u_color'] = new_color
-
-if __name__ == '__main__' and sys.flags.interactive == 0:
+        
+if __name__ == '__main__':
     canvas = Canvas()
     canvas.show()
     app.run()

@@ -1,3 +1,6 @@
+# TODO: implement tilings of the hyperbolic plane
+
+
 import numpy as np 
 from vispy import app, gloo
 import sys
@@ -5,9 +8,6 @@ try:
     from PyQt6 import QtGui, QtCore
 except ImportError:
     QtGui, QtCore = None, None
-
-
-
 
 # Define some helper functions for the Poincare disk model.
 def get_unit_circle(n_segments=100):
@@ -52,7 +52,7 @@ vertex = """
 attribute vec2 a_position;
 void main(void) {
     gl_Position = vec4(a_position, 0.0, 1.0);
-    gl_PointSize = 10.0;
+    gl_PointSize = 3.0;
 }
 """
 
