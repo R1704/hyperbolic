@@ -2,6 +2,9 @@
 # TODO: zoom in/out, pan, tilt, etc.
 # TODO: better color selection
 # TODO: wave function visualization
+# TODO: make it a cube
+# TODO: Cube-to-Sphere Morphing
+# TODO: Poincaré Ball Model (3D)
 
 
 import sys
