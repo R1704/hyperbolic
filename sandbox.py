@@ -1,118 +1,97 @@
-# -*- coding: utf-8 -*-
-# -----------------------------------------------------------------------------
-# Copyright (c) Vispy Development Team. All Rights Reserved.
-# Distributed under the (new) BSD License. See LICENSE.txt for more info.
-# -----------------------------------------------------------------------------
-# Author: Nicolas P .Rougier
-# Date:   04/03/2014
-# -----------------------------------------------------------------------------
-"""
-Show a rotating cube with an outline
-====================================
-"""
-
+import sys
 import numpy as np
+from vispy import app, scene
+from vispy.color import Colormap
 
-from vispy import gloo, app
-from vispy.gloo import Program, VertexBuffer, IndexBuffer
-from vispy.util.transforms import perspective, translate, rotate
-from vispy.geometry import create_cube
+# Set up the canvas
+canvas = scene.SceneCanvas(keys='interactive', bgcolor='w')
+view = canvas.central_widget.add_view()
+view.camera = scene.TurntableCamera(up='z', fov=60)
 
-vertex = """
-uniform mat4 u_model;
-uniform mat4 u_view;
-uniform mat4 u_projection;
-uniform vec4 u_color;
+# Wave equation parameters - CORRECTED FOR STABILITY
+nx, ny = 250, 250
+dx = dy = 0.04
+c = 1.0     # Reduced wave speed
+dt = 0.02  # Much smaller time step for stability
+r = (c * dt / dx) ** 2  # Stability parameter
+print(f"Stability parameter r = {r}")  # Should be < 0.25 for 2D wave equation stability
 
-attribute vec3 position;
-attribute vec2 texcoord;
-attribute vec3 normal;
-attribute vec4 color;
+# Initialize wave field
+u = np.zeros((nx, ny))  # current
+u_prev = np.zeros((nx, ny))  # previous
+u_next = np.zeros((nx, ny))  # next
 
-varying vec4 v_color;
-void main()
-{
-    v_color = u_color * color;
-    gl_Position = u_projection * u_view * u_model * vec4(position,1.0);
-}
-"""
+# Create a more pronounced initial pulse
+rang = 2 * np.pi 
+x = np.linspace(-rang, rang, nx)
+y = np.linspace(-rang, rang, ny)
+X, Y = np.meshgrid(x, y)
+# Initial displacement - larger amplitude
+u = np.exp(-1.0*(X**2 + Y**2))
 
-fragment = """
-varying vec4 v_color;
-void main()
-{
-    gl_FragColor = v_color;
-}
-"""
+# Simple initial conditions - create an outgoing wave
+u_prev = u.copy() * 0.9  # This creates an outgoing wave
 
+# Create surface plot
+p1 = scene.visuals.SurfacePlot(z=u, color=(0.3, 0.3, 1, 1))
+p1.transform = scene.transforms.MatrixTransform()
+p1.transform.scale([1/249., 1/249., 0.5/249.])  # Scale z less for better visualization
+p1.transform.translate([-0.5, -0.5, 0])
 
-class Canvas(app.Canvas):
-    def __init__(self):
-        app.Canvas.__init__(self, size=(512, 512), title='Rotating cube',
-                            keys='interactive')
-        self.timer = app.Timer('auto', self.on_timer)
+view.add(p1)
 
-        # Build cube data
-        V, I, outline = create_cube()
-        vertices = VertexBuffer(V)
-        self.faces = IndexBuffer(I)
-        self.outline = IndexBuffer(outline)
+# Create and apply colormap with more contrast
+colors = np.array([
+    [0.0, 0.0, 1.0],  # blue
+    [0.5, 0.5, 1.0],  # light blue
+    [1.0, 1.0, 1.0],  # white
+    [1.0, 0.5, 0.5],  # light red
+    [1.0, 0.0, 0.0],  # red
+])
+positions = [0.0, 0.25, 0.5, 0.75, 1.0]
+colormap = Colormap(colors, positions)
+p1.clim = (-0.3, 0.3)  # More sensitive range to see smaller amplitudes
+p1.cmap = colormap
 
-        # Build program
-        # --------------------------------------
-        self.program = Program(vertex, fragment)
-        self.program.bind(vertices)
+frame_count = 0
+skip_frames = 10  # Only update visualization every N physics steps
 
-        # Build view, model, projection & normal
-        # --------------------------------------
-        view = translate((0, 0, -5))
-        model = np.eye(4, dtype=np.float32)
-
-        self.program['u_model'] = model
-        self.program['u_view'] = view
-        self.phi, self.theta = 0, 0
-
-        self.activate_zoom()
-
-        # OpenGL initialization
-        # --------------------------------------
-        gloo.set_state(clear_color=(0.30, 0.30, 0.35, 1.00), depth_test=True,
-                       polygon_offset=(1, 1), line_width=0.75,
-                       blend_func=('src_alpha', 'one_minus_src_alpha'))
-        self.timer.start()
-
-        self.show()
-
-    def on_draw(self, event):
-        gloo.clear(color=True, depth=True)
-
-        # Filled cube
-        gloo.set_state(blend=False, depth_test=True, polygon_offset_fill=True)
-        self.program['u_color'] = 1, 1, 1, 1
-        self.program.draw('triangles', self.faces)
-
-        # Outlined cube
-        gloo.set_state(blend=True, depth_mask=False, polygon_offset_fill=False)
-        self.program['u_color'] = 0, 0, 0, 1
-        self.program.draw('lines', self.outline)
-        gloo.set_state(depth_mask=True)
-
-    def on_resize(self, event):
-        self.activate_zoom()
-
-    def activate_zoom(self):
-        gloo.set_viewport(0, 0, *self.physical_size)
-        projection = perspective(45.0, self.size[0] / float(self.size[1]),
-                                 2.0, 10.0)
-        self.program['u_projection'] = projection
-
-    def on_timer(self, event):
-        self.theta += .5
-        self.phi += .5
-        self.program['u_model'] = np.dot(rotate(self.theta, (0, 0, 1)),
-                                         rotate(self.phi, (0, 1, 0)))
-        self.update()
+# Timer for animation
+def update(event):
+    global u, u_prev, u_next, frame_count
+    
+    # Run multiple physics steps per frame for speed
+    for _ in range(skip_frames):
+        # Wave equation step - using numpy operations for speed
+        laplacian = (
+            np.roll(u, 1, axis=0) + np.roll(u, -1, axis=0) + 
+            np.roll(u, 1, axis=1) + np.roll(u, -1, axis=1) - 4*u
+        )
+        u_next = 2*u - u_prev + r*laplacian
+        
+        # Simple absorbing boundary conditions
+        u_next[0:2, :] = 0
+        u_next[-2:, :] = 0
+        u_next[:, 0:2] = 0
+        u_next[:, -2:] = 0
+        
+        # Apply damping to prevent instability
+        u_next *= 0.999
+        
+        # Update arrays - doing it efficiently
+        u_prev, u, u_next = u, u_next, u_prev
+    
+    # Print max amplitude occasionally to verify wave is moving
+    frame_count += 1
+    if frame_count % 100 == 0:
+        print(f"Max amplitude: {np.max(np.abs(u))}, Frame: {frame_count}")
+    
+    # Update visualization
+    p1.set_data(z=u)
+    
+timer = app.Timer(interval=1, connect=update, start=True)
 
 if __name__ == '__main__':
-    c = Canvas()
-    app.run()
+    canvas.show()
+    if sys.flags.interactive == 0:
+        app.run()
