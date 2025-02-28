@@ -64,6 +64,7 @@ def update(frame):
     # Update plot
     ax.clear()
     ax = plot_surface(X, Y, Z, ax)
+    print(X, Y, Z)
     return ax
 
 # Create animation

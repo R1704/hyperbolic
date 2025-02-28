@@ -28,8 +28,6 @@ void main(void) {
 }
 """
 
-
-
 # Define the canvas class.
 class Canvas(app.Canvas):
     def __init__(self):
