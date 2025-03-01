@@ -2,6 +2,9 @@ import sys
 import numpy as np
 from vispy import app, gloo
 from utils import get_unit_circle, get_geodesic, circle_inversion
+from vispy import app
+app.use_app('egl')
+
 
 # Vertex shader (common for Euclidean and Hyperbolic):
 vertex_shader_template = """
