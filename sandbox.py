@@ -3,6 +3,11 @@ import numpy as np
 from vispy import app, scene
 from vispy.color import Colormap
 
+import os
+import vispy
+vispy.use(app='pyqt5')
+
+
 # Set up the canvas
 canvas = scene.SceneCanvas(keys='interactive', bgcolor='w')
 view = canvas.central_widget.add_view()

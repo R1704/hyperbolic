@@ -11,7 +11,33 @@ import sys
 import numpy as np
 from vispy import app, gloo
 from utils import get_unit_circle, get_geodesic, circle_inversion
+import streamlit as st
+import numpy as np
+from PIL import Image
+from vispy import app
 
+
+# Import your Canvas from projection.py.
+from projection import Canvas
+
+def main():
+    st.title("Hyperbolic Projection (Offscreen)")
+    
+    # Create the canvas without showing an interactive window.
+    canvas = Canvas()
+    
+    # Force one draw cycle.
+    canvas.on_draw(None)
+    # Render the current buffer to an image array.
+    img_data = canvas.render()  # Returns an RGBA array (float32, [0,1])
+    
+    # Convert to an 8-bit image for display.
+    img = Image.fromarray((np.clip(img_data, 0, 1) * 255).astype(np.uint8))
+    
+    st.image(img, caption="Projection", use_column_width=True)
+
+if __name__ == "__main__":
+    main()
 
 # Vertex shaders (Euclidean and Hyperbolic share similar code):
 vertex_shader_template = """
@@ -39,11 +65,6 @@ void main(void) {
 }
 """
 
-
-
-
-
-
 def transform_vertex(vertex, rotation, scale, tilt, translation):
     c, s = np.cos(rotation), np.sin(rotation)
     R = np.array([[c, -s], [s, c]])
@@ -54,11 +75,6 @@ def transform_vertex(vertex, rotation, scale, tilt, translation):
     # Apply tilt (skew) transformation
     transformed[1] += tilt * transformed[0]
     return transformed
-
-
-
-
-
 
 radius = 0.5
 
