@@ -46,7 +46,6 @@ class Canvas(app.Canvas):
         self.program_euclid = gloo.Program(vertex_shader_template, fragment)
         self.program_hyper = gloo.Program(vertex_shader_template, fragment)
         self.program_lines = gloo.Program(vertex_shader_template, fragment)
-        # We use program_points only for points if needed.
         self.program_points = gloo.Program("""
         uniform float u_rotation;
         uniform float u_scale;
@@ -69,10 +68,10 @@ class Canvas(app.Canvas):
         gloo.set_clear_color('black')
         self._init_uniforms()
 
-        # Use a vectorized unit circle for the Poincaré disc.
+        # Use a vectorized unit circle for the Poincaré disk.
         self.unit_circle = get_unit_circle(scale=radius)
         
-        # Modular multiplication visualization parameters.
+        # Modular multiplication visualization parameters
         self.t = 0.0
         self.step = 0.01
         self.time_active = True
@@ -83,13 +82,7 @@ class Canvas(app.Canvas):
         # Cache for HSV-to-RGB conversions.
         self.colors_cache = {}
         
-        # Inversion density: 0 means full resolution, higher means more thinning.
-        self.inversion_density = 1  # default: sample every 2 points
-        
-        # Lists to hold computed geometry.
-        self.inversion_segments = []
-        
-        # Initial calculation.
+        # Initial calculation
         self.update_modular_data()
 
         self.rotation = 0.0
@@ -144,7 +137,7 @@ class Canvas(app.Canvas):
         return rgb
 
     def update_modular_data(self):
-        """Calculate modular multiplication data using vectorized operations and compute inversion segments."""
+        """Calculate modular multiplication data for current t value using vectorized operations."""
         angle = 2 * np.pi / self.num_dots
         
         # Vectorized calculation for dot positions.
@@ -159,7 +152,7 @@ class Canvas(app.Canvas):
         self.modular_lines[0::2] = self.dot_positions
         self.modular_lines[1::2] = self.dot_positions[targets]
         
-        # Calculate geodesic segments for hyperbolic visualization.
+        # Calculate geodesics for hyperbolic visualization.
         self.geodesic_segments = []
         for i in range(0, len(self.modular_lines), 2):
             z1 = complex(self.modular_lines[i][0], self.modular_lines[i][1])
@@ -172,40 +165,37 @@ class Canvas(app.Canvas):
                 if valid_seg.shape[0] > 1:
                     self.geodesic_segments.append(valid_seg)
         
-        # Compute inversion segments.
-        # For each geodesic segment, sample points (with density thinning) and compute their inversion.
-        density_factor = {0: 1, 1: 2, 2: 4}.get(self.inversion_density, 2)
-        self.inversion_segments = []
+        # Calculate inversion points using a less strict condition (<= instead of <).
+        self.inversion_points = []
         for seg in self.geodesic_segments:
-            sampled = seg[::density_factor]
-            if sampled.shape[0] < 2:
-                continue
-            inv_points = []
-            for pt in sampled:
+            for pt in seg:
                 z = complex(pt[0], pt[1])
                 z_inv = circle_inversion(z, 0, radius)
-                inv_points.append([z_inv.real, z_inv.imag])
-            inv_points = np.array(inv_points, dtype=np.float32)
-            self.inversion_segments.append(inv_points)
+                if abs(z_inv) <= radius:  # Allow boundary points
+                    self.inversion_points.append([z_inv.real, z_inv.imag])
         
-        print(f"Generated {sum(len(seg) for seg in self.inversion_segments)} inversion points across {len(self.inversion_segments)} segments")
+        if self.inversion_points:
+            self.inversion_points = np.array(self.inversion_points, dtype=np.float32)
+        else:
+            self.inversion_points = np.array([], dtype=np.float32)
+        print(f"Generated {len(self.inversion_points)} inversion points")
 
     def on_draw(self, event):
         gloo.clear()
         width, height = self.size
-
-        # Set a common line width for drawing (if supported).
-        gloo.set_state(line_width=2.0)
         
         # Draw left side: Euclidean visualization.
         gloo.set_viewport(0, 0, width // 2, height)
         self.program_euclid['u_rotation'] = self.rotation
+        
+        # Draw circle boundary on left side.
         self.program_euclid['a_position'] = self.unit_circle
         self.program_euclid['u_color'] = (0.3, 0.3, 0.3, 1.0)
         self.program_euclid.draw('line_strip')
         
         # Draw modular lines on left side.
         if self.show_modular_viz and self.modular_lines.size:
+            # Batch drawing in chunks.
             batch_size = 20
             for i in range(0, len(self.modular_lines), batch_size):
                 batch = self.modular_lines[i:i+batch_size]
@@ -220,30 +210,40 @@ class Canvas(app.Canvas):
         # Draw right side: Hyperbolic visualization.
         gloo.set_viewport(width // 2, 0, width // 2, height)
         self.program_hyper['u_rotation'] = self.rotation
+        
+        # Draw circle boundary on right side.
         self.program_hyper['a_position'] = self.unit_circle
         self.program_hyper['u_color'] = (0.3, 0.3, 0.3, 1.0)
         self.program_hyper.draw('line_strip')
         
         if self.show_modular_viz:
-            # Draw hyperbolic geodesic segments.
-            for i, seg in enumerate(self.geodesic_segments):
-                if seg.shape[0] < 2:
-                    continue
-                h = ((i) % self.num_dots) / self.num_dots
-                r, g, b = self._hsv_to_rgb(h * 360)
-                self.program_lines['u_color'] = (r, g, b, 1.0)
-                self.program_lines['a_position'] = seg
-                self.program_lines.draw('line_strip')
+            # Draw hyperbolic geodesics.
+            for i in range(0, len(self.modular_lines), 2):
+                if i + 1 >= len(self.modular_lines):
+                    break
+                p1 = self.modular_lines[i]
+                p2 = self.modular_lines[i+1]
+                z1 = complex(p1[0], p1[1])
+                z2 = complex(p2[0], p2[1])
+                arc = get_geodesic(z1, z2)
+                if arc.size > 0:
+                    seg = np.column_stack((arc.real, arc.imag)).astype(np.float32)
+                    norms = np.sqrt(np.sum(seg * seg, axis=1))
+                    valid_seg = seg[norms <= radius]
+                    if valid_seg.shape[0] > 1:
+                        h = ((i // 2) % self.num_dots) / self.num_dots
+                        r, g, b = self._hsv_to_rgb(h * 360)
+                        self.program_lines['u_color'] = (r, g, b, 1.0)
+                        self.program_lines['a_position'] = valid_seg
+                        self.program_lines.draw('line_strip')
             
-            # Draw inverted segments with the same color and line width.
-            for i, inv_seg in enumerate(self.inversion_segments):
-                if inv_seg.shape[0] < 2:
-                    continue
-                h = ((i) % self.num_dots) / self.num_dots
-                r, g, b = self._hsv_to_rgb(h * 360)
-                self.program_lines['u_color'] = (r, g, b, 1.0)
-                self.program_lines['a_position'] = inv_seg
-                self.program_lines.draw('line_strip')
+        # Draw inversions.
+        if self.show_inversions and self.inversion_points.size:
+            self.program_points['u_color'] = (0.0, 1.0, 1.0, 1.0)  # Brighter cyan
+            self.program_points['u_rotation'] = self.rotation
+            self.program_points['u_tilt'] = self.tilt
+            self.program_points['a_position'] = self.inversion_points
+            self.program_points.draw('points')
 
     def on_mouse_press(self, event):
         self._last_mouse_pos = event.pos
@@ -303,9 +303,11 @@ class Canvas(app.Canvas):
             self.update_modular_data()
             print("Reset to optimal performance settings")
         elif event.text.upper() == 'P':
-            # Toggle inversion density: cycle through 0 (full), 1 (half), 2 (quarter)
-            self.inversion_density = (self.inversion_density + 1) % 3
-            densities = ["Full", "Half", "Quarter"]
+            if hasattr(self, 'inversion_density'):
+                self.inversion_density = (self.inversion_density + 1) % 3
+            else:
+                self.inversion_density = 0
+            densities = ["Low", "Medium", "High"]
             print(f"Inversion point density: {densities[self.inversion_density]}")
             self.update_modular_data()
         elif event.text == '2':
@@ -327,7 +329,6 @@ class Canvas(app.Canvas):
     def on_timer(self, event):
         if self.time_active:
             self.t += self.step
-            # Update data every few frames for performance.
             if int(self.t * 100) % 4 == 0:
                 self.update_modular_data()
         self.update()

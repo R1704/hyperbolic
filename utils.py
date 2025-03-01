@@ -16,7 +16,7 @@ def inverse_mobius_transform(z, a):
     """Apply a Mobius transformation to map the origin to z."""
     return (a + z) / (1 + np.conj(a) * z)
 
-def get_arc(z, n_points=25_000):
+def get_arc(z, n_points=10_000):
     """Compute the geodesic circle through the origin and z."""
     t = np.linspace(0, 1, num=n_points)
     return t * z
