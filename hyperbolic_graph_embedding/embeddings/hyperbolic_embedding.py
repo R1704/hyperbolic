@@ -1,8 +1,11 @@
 import torch
+import torch.nn.functional as F
 import geoopt
 
-from ..manifolds.poincare_manifold import PoincareManifold
-from base_embedding import BaseEmbedding
+
+from hyperbolic_graph_embedding.math_utils.utils import g
+from hyperbolic_graph_embedding.manifolds.poincare_manifold import PoincareManifold
+from hyperbolic_graph_embedding.embeddings.base_embedding import BaseEmbedding
 
 class HyperbolicEmbedding(BaseEmbedding):
     """

@@ -1,4 +1,4 @@
-from base_manifold import BaseManifold
+from hyperbolic_graph_embedding.manifolds.base_manifold import BaseManifold
 import geoopt
 
 class PoincareManifold(BaseManifold):
@@ -7,7 +7,7 @@ class PoincareManifold(BaseManifold):
     """
     def __init__(self, dim: int, c: float = 1.0):
         # c > 0: curvature parameter; Geoopt expects c and dim.
-        self.manifold = geoopt.PoincareBall(c=c, dim=dim)
+        self.manifold = geoopt.PoincareBall(c=c)
     
     def exp_map(self, x, v):
         """

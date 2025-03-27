@@ -1,6 +1,9 @@
 import torch
-import torch.functional as F
-from base_embedding import BaseEmbedding
+import torch.nn as nn
+import torch.nn.functional as F
+
+from hyperbolic_graph_embedding.math_utils.utils import g
+from hyperbolic_graph_embedding.embeddings.base_embedding import BaseEmbedding
 
 
 class EuclideanEmbedding(BaseEmbedding):
@@ -43,3 +46,6 @@ class EuclideanEmbedding(BaseEmbedding):
         data_loss = F.mse_loss(mapped, adjacency_matrix)
         reg_loss = self.lambda_reg * torch.sum(embeddings ** 2)
         return data_loss + reg_loss
+    
+    def optimize(self, loss):
+        return super().optimize(loss)
