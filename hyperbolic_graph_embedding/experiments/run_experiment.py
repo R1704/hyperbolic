@@ -1,48 +1,44 @@
 import torch
 from torch_geometric.utils import from_networkx, to_dense_adj
-from hyperbolic_graph_embedding.data.tree import ExpressionGenerator, ExpressionVisualizer
+import geoopt
+from hyperbolic_graph_embedding.data.tree import ExpressionGenerator, ExpressionVisualizer, generate_and_visualize
 from hyperbolic_graph_embedding.embeddings.euclidean_embedding import EuclideanEmbedding
 from hyperbolic_graph_embedding.embeddings.hyperbolic_embedding import HyperbolicEmbedding
 from hyperbolic_graph_embedding.manifolds.poincare_manifold import PoincareManifold
 from hyperbolic_graph_embedding.visualization.plotter import Plotter
 from hyperbolic_graph_embedding.experiments.evaluate import compute_map, compute_distortion
 
+
 def run_experiment():
     # Generate a set of random symbolic expressions.
     generator = ExpressionGenerator(max_depth=5, variables=['x', 'y'])
-    expressions = [generator.generate_expression() for _ in range(50)]
+    # expressions = [generator.generate_expression() for _ in range(50)]
     
-    # Convert expressions to graphs (one per expression).
-    visualizer = ExpressionVisualizer()
-    networkx_graphs = [visualizer.expression_to_graph(expr) for expr in expressions]
-
-    # Convert NetworkX graph to PyTorch Geometric Data
-    # Add dummy features if not present
-    for g in networkx_graphs:
-        for node in g.nodes():
-            if 'feat' not in g.nodes[node]:
-                g.nodes[node]['feat'] = torch.ones(1)  # Dummy feature
+    expr, graph = generate_and_visualize(max_depth=6, variables=['x', 'y'])
+    for node in graph.nodes():
+            if 'feat' not in graph.nodes[node]:
+                graph.nodes[node]['feat'] = torch.ones(1)  # Dummy feature
     
-    # Convert first graph to PyG data
-    graph_data = from_networkx(networkx_graphs[0])
+    # Convert graph to PyG data
+    graph_data = from_networkx(graph)
     
     # Extract adjacency matrix from graph_data
     adj_matrix = to_dense_adj(graph_data.edge_index)[0]  # Get the first item since to_dense_adj returns a batch
     
     num_nodes = graph_data.num_nodes
-    embedding_dim = 2  # For visualization, use 2D.
+    embedding_dim = 2  # For visualization, use 2D.     
     
     # Initialize models
     euclidean_model = EuclideanEmbedding(num_nodes, embedding_dim)
-    manifold = PoincareManifold(dim=embedding_dim, c=1.0)
+    manifold = PoincareManifold(c=1.0)
     hyperbolic_model = HyperbolicEmbedding(num_nodes, embedding_dim, manifold)
     
     # Set up optimizers
     optimizer_euc = torch.optim.Adam(euclidean_model.parameters(), lr=0.01)
-    optimizer_hyp = torch.optim.Adam(hyperbolic_model.parameters(), lr=0.01)
+    optimizer_hyp = geoopt.optim.RiemannianAdam(hyperbolic_model.parameters(), lr=0.01)
     
     # Training loop
-    for epoch in range(100):
+    for epoch in range(1000):
         # Euclidean Training Step
         optimizer_euc.zero_grad()
         embeddings_euc = euclidean_model.forward(graph_data)
@@ -71,12 +67,42 @@ def run_experiment():
     print("Euclidean MAP:", map_euc, "Distortion:", distortion_euc)
     print("Hyperbolic MAP:", map_hyp, "Distortion:", distortion_hyp)
     
-    # Visualization (plot both embeddings):
+    # Get the original graph structure
     
-    plotter_euc = Plotter(title="Euclidean Embeddings")
-    plotter_hyp = Plotter(title="Hyperbolic Embeddings")
-    plotter_euc.plot_embeddings(embeddings_euc.detach().cpu().numpy())
-    plotter_hyp.plot_embeddings(embeddings_hyp.detach().cpu().numpy())
+    node_labels = {i: graph.nodes[node].get('label', '') for i, node in enumerate(graph.nodes())}
+    node_types = [graph.nodes[node].get('type', 'other') for node in graph.nodes()]
+
+    # Convert node IDs to more readable labels for visualization
+    node_labels = {}
+    node_types = []
+
+    for i, node in enumerate(graph.nodes()):
+        # Get the node attributes
+        attrs = graph.nodes[node]
+        # Store the label (could be operator, variable name, etc.)
+        node_labels[i] = attrs.get('label', str(node)) 
+        # Store the type for color coding
+        node_types.append(attrs.get('type', 'other'))
+
+    # Visualize the embeddings
+    plotter = Plotter("Symbolic Expression Tree")
+    plotter.plot_embeddings(
+        embeddings_euc,
+        graph=graph,
+        node_labels=node_labels,
+        node_types=node_types,
+        is_hyperbolic=False
+    )
+
+    plotter.plot_embeddings(
+        embeddings_hyp,
+        graph=graph,
+        node_labels=node_labels,
+        node_types=node_types,
+        is_hyperbolic=True,
+        show_geodesic_grid=True,
+        manifold=manifold
+    )
 
 if __name__ == "__main__":
     run_experiment()
