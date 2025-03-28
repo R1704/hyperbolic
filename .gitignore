@@ -250,3 +250,6 @@ pyrightconfig.json
 
 # node_modules
 node_modules
+
+# output
+output/

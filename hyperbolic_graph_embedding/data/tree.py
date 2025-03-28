@@ -1,3 +1,4 @@
+import os
 import random
 import sympy as sp
 import networkx as nx
@@ -213,7 +214,8 @@ class ExpressionVisualizer:
         return node_id
     
     def visualize(self, G: nx.DiGraph, title: str = "Expression Tree", 
-                  figsize: Tuple[int, int] = (10, 8)) -> None:
+                  figsize: Tuple[int, int] = (10, 8), 
+                  save_path: str = None, show: bool = True) -> None:
         """
         Visualize the expression graph.
         
@@ -221,6 +223,8 @@ class ExpressionVisualizer:
             G: NetworkX graph to visualize
             title: Plot title
             figsize: Figure size (width, height)
+            save_path: Path to save the visualization (if None, don't save)
+            show: Whether to display the plot
         """
         plt.figure(figsize=figsize)
         
@@ -249,16 +253,30 @@ class ExpressionVisualizer:
         
         plt.title(title)
         plt.tight_layout()
-        plt.show()
+        
+        # Save the figure if a path is provided
+        if save_path:
+            # Create directory if it doesn't exist
+            os.makedirs(os.path.dirname(save_path) or '.', exist_ok=True)
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"Tree visualization saved to {save_path}")
+            
+        if show:
+            plt.show()
+        else:
+            plt.close()
 
 
-def generate_and_visualize(max_depth: int = 3, variables: List[str] = None) -> Tuple[sp.Expr, nx.DiGraph]:
+def generate_and_visualize(max_depth: int = 3, variables: List[str] = None, 
+                          save_path: str = None, show: bool = True) -> Tuple[sp.Expr, nx.DiGraph]:
     """
     Generate a random expression and visualize it.
     
     Args:
         max_depth: Maximum depth of the expression tree
         variables: List of variable names to use
+        save_path: Path to save the visualization (if None, don't save)
+        show: Whether to display the plot
         
     Returns:
         The generated expression and corresponding graph
@@ -276,10 +294,9 @@ def generate_and_visualize(max_depth: int = 3, variables: List[str] = None) -> T
     # Convert to graph and visualize
     visualizer = ExpressionVisualizer()
     graph = visualizer.expression_to_graph(expr)
-    visualizer.visualize(graph)
+    visualizer.visualize(graph, save_path=save_path, show=show)
     
     return expr, graph
-
 
 if __name__ == "__main__":
     # Example usage
