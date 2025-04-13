@@ -26,7 +26,6 @@ class HyperbolicEmbedding(BaseEmbedding):
             manifold=self.manifold.manifold
         )
 
-    
     def forward(self, data=None):
         """
         Returns the hyperbolic embeddings.
