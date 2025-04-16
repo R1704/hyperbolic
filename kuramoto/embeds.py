@@ -2,6 +2,7 @@ import os
 import math
 import random
 import numpy as np
+from rich import print
 import networkx as nx
 import networkx.generators.trees as trees
 import matplotlib.pyplot as plt
@@ -71,7 +72,19 @@ def generate_tree_and_distances(N, seed=42):
 
 N = 50  # Number of nodes in the tree
 tree, graph_dists = generate_tree_and_distances(N)
+print("this is my tree")
+# Print the tree with all attributes
+print("Tree nodes with attributes:")
+print(tree.nodes(data=True))
 
+print("\nTree edges with attributes:")
+print(tree.edges(data=True))
+
+# To get the root node, you can use the following logic:
+# Assuming the root is the node with the smallest degree (or customize as needed)
+root_node = min(tree.nodes, key=lambda n: tree.degree[n])
+print(f"\nRoot node: {root_node}")
+print(f'root node {root_node} has degree {tree.degree[root_node]}')
 # For a target similarity, we can apply the same hyperbolic_g to the graph distances.
 # Optionally, one may normalize distances; here we use the raw ones.
 I_target = hyperbolic_g(graph_dists)
@@ -161,7 +174,7 @@ def hierarchical_tree_init(tree, root=None, radius=0.9):
     return embeddings
 
 # Replace the random initialization with hierarchical initialization
-z0 = hierarchical_tree_init(tree, radius=0.8)  # shape: (N, 2)
+z0 = hierarchical_tree_init(tree, root='0', radius=0.8)  # shape: (N, 2)
 
 # --------------------------
 # 4. Hyperbolic Kuramoto Module
