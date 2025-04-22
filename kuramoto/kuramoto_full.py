@@ -21,6 +21,20 @@ import sklearn.metrics as skm
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from hyperbolic_graph_embedding.data.tree import ExpressionGenerator, ExpressionVisualizer, generate_and_visualize
 
+
+# Add this at the top of your file after imports
+def set_seed(seed=42):
+    """Set seeds for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    print(f"Random seeds set to {seed} for reproducibility")
+
 # --------------------------
 # 1. Hyperbolic Helper & Loss Functions
 # --------------------------
@@ -32,14 +46,31 @@ def hyperbolic_g(x):
     return 2 * torch.exp(-x) / (1 + torch.exp(-x))
 
 def mse_similarity_loss(z, I_target):
-    """MSE on similarity g(d_hyp) vs. I_target."""
+    """MSE on similarity g(d_hyp) vs. I_target.
+    
+    This loss minimizes the Mean Squared Error between:
+    - The similarity of node embeddings (using hyperbolic_g function)
+    - Target similarities from the original graph
+    
+    Useful when we care more about preserving relative similarities
+    rather than exact distances. Works well for general graph embedding.
+    """
     D = manifold.dist(z.unsqueeze(1), z.unsqueeze(0))
     G = hyperbolic_g(D)
     mse = F.mse_loss(G, I_target, reduction='sum')
     return mse
 
 def stress_loss(z, D_target):
-    """Stress (MDS) loss: sum_{i<j}(d_hyp(i,j) - D_target(i,j))^2."""
+    """Stress (MDS) loss: sum_{i<j}(d_hyp(i,j) - D_target(i,j))^2.
+    
+    This is a classic Multidimensional Scaling (MDS) stress function that:
+    - Directly minimizes the squared difference between hyperbolic distances and target distances
+    - Preserves the exact global distance structure of the graph
+    - Particularly effective for tree embeddings where distances have hierarchical meaning
+    
+    This loss is ideal when the goal is to preserve the exact distance structure
+    of the original graph, as is often the case for tree reconstruction.
+    """
     D = manifold.dist(z.unsqueeze(1), z.unsqueeze(0))
     # Ensure D_target is on the same device
     D_target = D_target.to(z.device) 
@@ -49,7 +80,21 @@ def stress_loss(z, D_target):
     return stress
 
 def smooth_binary_loss(z, edge_index, epsilon, tau=50.0):
-    """Soft threshold loss using sigmoid."""
+    """Soft threshold loss using sigmoid.
+    
+    This loss uses a soft binary classification approach:
+    - Encourages connected nodes to have distance < epsilon
+    - Encourages unconnected nodes to have distance > epsilon
+    - Tau controls the sharpness of the sigmoid boundary
+    
+    Advantages:
+    - Simple and intuitive binary classification of edges vs non-edges
+    - Sigmoid function provides smooth gradients
+    
+    Limitations:
+    - Doesn't preserve exact distances, only binary relationships
+    - Performance depends heavily on choice of epsilon threshold
+    """
     N = z.size(0)
     D = manifold.dist(z.unsqueeze(1), z.unsqueeze(0))
     # build masks
@@ -64,7 +109,22 @@ def smooth_binary_loss(z, edge_index, epsilon, tau=50.0):
     return pos + neg
 
 def info_nce_loss(z, edge_index, tau=0.1):
-    """Contrastive InfoNCE loss with stabilization."""
+    """Contrastive InfoNCE loss with stabilization.
+    
+    This implements the InfoNCE (Noise-Contrastive Estimation) contrastive loss:
+    - Treats connected nodes as positive samples
+    - Treats all other nodes as negative samples
+    - Minimizes -log(exp(-d_pos/τ) / sum(exp(-d_all/τ)))
+    
+    Advantages:
+    - Effective for learning representations that discriminate between connected and unconnected nodes
+    - Temperature parameter τ allows control of the concentration of distributions
+    - Well-studied in contrastive learning literature
+    
+    Limitations:
+    - Can be numerically unstable (addressed with clamping and epsilon values)
+    - May not preserve exact distances, focusing on relative ordering instead
+    """
     N = z.size(0)
     D = manifold.dist(z.unsqueeze(1), z.unsqueeze(0))
     logits = -D / tau
@@ -96,7 +156,22 @@ def info_nce_loss(z, edge_index, tau=0.1):
     return loss / count if count > 0 else torch.tensor(0.0, device=z.device, requires_grad=True)
 
 def triplet_loss(z, edge_index, margin=1.0):
-    """Triplet loss with random negative sampling."""
+    """Triplet loss with random negative sampling.
+    
+    This implements the classic triplet loss with (anchor, positive, negative) triplets:
+    - For each connected pair (anchor, positive), a random unconnected node is chosen as negative
+    - Loss = max(0, d(anchor, positive) - d(anchor, negative) + margin)
+    - Enforces that positive pairs are closer than negative pairs by at least margin
+    
+    Advantages:
+    - Directly optimizes for relative ranking of distances
+    - Margin parameter provides control over separation between positives and negatives
+    - Simple and intuitive geometric interpretation
+    
+    Limitations:
+    - Random sampling of negatives may not find the most informative triplets
+    - Performance depends on appropriate margin value
+    """
     N = z.size(0)
     D = manifold.dist(z.unsqueeze(1), z.unsqueeze(0))
     
@@ -133,16 +208,22 @@ def triplet_loss(z, edge_index, margin=1.0):
     return loss / count if count > 0 else torch.tensor(0.0, device=z.device, requires_grad=True)
 
 def nt_xent_loss(z, edge_index, temperature=0.1, normalize=False):
-    """NT-Xent loss with balanced attractive and repulsive forces to prevent collapse.
+    """Hybrid loss combining stress and NT-Xent losses with adaptive weighting.
     
-    Args:
-        z: Node embeddings tensor of shape [N, D]
-        edge_index: Edge tensor of shape [2, E]
-        temperature: Temperature scaling parameter (lower = sharper contrasts)
-        normalize: Whether to L2 normalize embeddings (typically not needed in hyperbolic space)
+    This combines the strengths of different loss functions:
+    - Stress loss: Preserves exact distance structure (global accuracy)
+    - NT-Xent loss: Prevents collapse and provides stability
+    - Depth-weighted adjustment: Prioritizes preserving important hierarchical relationships
+    - Dynamic weighting: Shifts focus from stability to accuracy during training
     
-    Returns:
-        Loss value as a tensor
+    Advantages:
+    - Balances global distance preservation with local stability
+    - Adaptive weights automatically adjust focus during training
+    - Special attention to hierarchical relationships for tree structures
+    - Boundary penalties prevent problematic embeddings
+    
+    This is the recommended loss for tree reconstruction tasks as it combines
+    the structural accuracy of stress loss with the stability of contrastive methods.
     """
     N = z.size(0)
     
@@ -232,17 +313,20 @@ def nt_xent_loss(z, edge_index, temperature=0.1, normalize=False):
 def hybrid_loss(z, D_target, edge_index, epoch=0, max_epochs=8000, alpha=0.5, temperature=0.1):
     """Hybrid loss combining stress and NT-Xent losses with adaptive weighting.
     
-    Args:
-        z: Node embeddings tensor of shape [N, D]
-        D_target: Target distance matrix from the original graph
-        edge_index: Edge tensor of shape [2, E]
-        epoch: Current training epoch (for dynamic weight adjustment)
-        max_epochs: Maximum training epochs (for dynamic weight adjustment)
-        alpha: Base weight coefficient for stress vs NT-Xent balance
-        temperature: Temperature parameter for NT-Xent loss
-        
-    Returns:
-        Combined loss value as a tensor with gradient
+    This combines the strengths of different loss functions:
+    - Stress loss: Preserves exact distance structure (global accuracy)
+    - NT-Xent loss: Prevents collapse and provides stability
+    - Depth-weighted adjustment: Prioritizes preserving important hierarchical relationships
+    - Dynamic weighting: Shifts focus from stability to accuracy during training
+    
+    Advantages:
+    - Balances global distance preservation with local stability
+    - Adaptive weights automatically adjust focus during training
+    - Special attention to hierarchical relationships for tree structures
+    - Boundary penalties prevent problematic embeddings
+    
+    This is the recommended loss for tree reconstruction tasks as it combines
+    the structural accuracy of stress loss with the stability of contrastive methods.
     """
     # Calculate individual loss components
     stress = stress_loss(z, D_target)
@@ -398,80 +482,125 @@ def generate_expression_tree_and_distances(max_depth=6, variables=None):
 
 def hierarchical_tree_init(tree, root=None, radius=0.9):
     """Initializes node positions hierarchically in the Poincaré disk."""
+    # Root finding logic remains the same
     if root is None:
-        # Find root (node with in-degree 0)
         roots = [n for n, d in tree.in_degree() if d == 0]
         if roots:
             root = roots[0]
-        else: # Fallback if no clear root (e.g., cycle or disconnected)
-             print("Warning: No root node found (in-degree 0). Using node with highest betweenness centrality.")
-             # Calculate centrality on the undirected version for robustness
-             G_undirected = tree.to_undirected()
-             if not nx.is_connected(G_undirected):
-                 print("Warning: Graph is disconnected. Centrality might be misleading.")
-                 # Pick the root from the largest connected component
-                 largest_cc = max(nx.connected_components(G_undirected), key=len)
-                 subgraph = G_undirected.subgraph(largest_cc)
-                 root = max(nx.betweenness_centrality(subgraph).items(), key=lambda x: x[1])[0]
-             else:
-                 root = max(nx.betweenness_centrality(G_undirected).items(), key=lambda x: x[1])[0]
+        else:
+            print("Warning: No root node found (in-degree 0). Using node with highest betweenness centrality.")
+            G_undirected = tree.to_undirected()
+            if not nx.is_connected(G_undirected):
+                largest_cc = max(nx.connected_components(G_undirected), key=len)
+                subgraph = G_undirected.subgraph(largest_cc)
+                root = max(nx.betweenness_centrality(subgraph).items(), key=lambda x: x[1])[0]
+            else:
+                root = max(nx.betweenness_centrality(G_undirected).items(), key=lambda x: x[1])[0]
 
     G = tree.to_undirected()
     try:
         dist = nx.single_source_shortest_path_length(G, root)
         maxd = max(dist.values()) if dist else 0
     except nx.NetworkXError:
-        print(f"Error: Root node '{root}' not found in graph for distance calculation. Using default init.")
-        # Fallback to random initialization if root is invalid
+        print(f"Error: Root node '{root}' not found in graph. Using default init.")
         N = len(tree.nodes())
-        return manifold.random_uniform((N, 2), max_norm=radius * 0.5) 
+        return manifold.random_uniform((N, 2), max_norm=radius * 0.5)
 
+    # Setup basics
     N = len(tree.nodes())
     node_list = list(tree.nodes())
     idx = {n: i for i, n in enumerate(node_list)}
     z = torch.zeros(N, 2)
-
-    # Place root near center with slight perturbation
+    
+    # Place root exactly at center
     if root in idx:
-        z[idx[root]] = 0.01 * (torch.rand(2) - 0.5)
+        z[idx[root]] = torch.zeros(2)
     else:
         print(f"Warning: Root node '{root}' not in node index map.")
-        # Place the first node near center as fallback
-        z[0] = 0.01 * (torch.rand(2) - 0.5) 
-
-    # Group nodes by depth
-    bydepth = {}
-    for n, d in dist.items():
-        bydepth.setdefault(d, []).append(n)
-
-    # Place nodes layer by layer
-    for d, nodes in bydepth.items():
-        if d == 0: continue
-        # Calculate radius for this layer
-        layer_radius = radius * (1 - math.exp(-d / maxd * 3.0)) if maxd > 0 else radius * 0.5
-
-        for i, n in enumerate(nodes):
-            if n not in idx: continue # Skip if node somehow not indexed
-            pi = idx[n]
-            
-            # Find parent position
+        z[0] = torch.zeros(2)
+        
+    # Calculate subtree size for each node
+    subtree_sizes = {n: 1 for n in G.nodes()}  # Start with 1 (the node itself)
+    
+    # Process nodes from bottom to top to calculate subtree sizes
+    for d in range(maxd, 0, -1):
+        nodes_at_d = [n for n, depth in dist.items() if depth == d]
+        for n in nodes_at_d:
             parents = list(tree.predecessors(n))
-            parent_pos = torch.zeros(2)
-            if parents and parents[0] in idx:
-                parent_pos = z[idx[parents[0]]]
-            
-            # Calculate angle
-            angle = 2 * math.pi * (i / len(nodes) + 0.1 * random.random())
-            # Adjust angle based on parent angle
-            if parent_pos.norm() > 0.01:
-                parent_ang = math.atan2(parent_pos[1], parent_pos[0])
-                angle = 0.7 * parent_ang + 0.3 * angle
+            if parents:
+                parent = parents[0]
+                subtree_sizes[parent] += subtree_sizes[n]
+    
+    # Process from top to bottom for placement
+    # First, create a mapping of children for each node
+    children_map = {n: list(tree.successors(n)) for n in tree.nodes()}
+    
+    # Then place nodes level by level
+    for d in range(1, maxd + 1):
+        nodes_at_d = [n for n, depth in dist.items() if depth == d]
+        
+        # Calculate the radius for this layer based on depth
+        # Use a more moderate radius scaling function
+        layer_radius = radius * (d / (maxd + 1))
+        
+        # Process each node at this depth
+        for n in nodes_at_d:
+            if n not in idx:
+                continue
                 
+            pi = idx[n]
+            parents = list(tree.predecessors(n))
+            
+            if not parents or parents[0] not in idx:
+                # Fallback for orphaned nodes
+                angle = 2 * math.pi * (nodes_at_d.index(n) / len(nodes_at_d))
+            else:
+                parent = parents[0]
+                parent_idx = idx[parent]
+                parent_pos = z[parent_idx]
+                parent_angle = math.atan2(parent_pos[1], parent_pos[0]) if parent_pos.norm() > 0.001 else 0
+                
+                # Get all children of this parent
+                siblings = children_map[parent]
+                total_siblings = len(siblings)
+                
+                # Find this node's position among siblings (by subtree size order)
+                # Larger subtrees get more space
+                sibling_weights = [subtree_sizes[sib] for sib in siblings]
+                total_weight = sum(sibling_weights)
+                
+                # Get the node's position in the sorted siblings list
+                sorted_siblings = sorted(zip(siblings, sibling_weights), key=lambda x: x[1], reverse=True)
+                sibling_pos = [i for i, (sib, _) in enumerate(sorted_siblings) if sib == n][0]
+                
+                # Calculate angle offset for this node among siblings
+                if total_siblings == 1:
+                    # Only child - place directly at parent angle
+                    angle_offset = 0
+                else:
+                    # Multiple siblings - allocate angular space based on subtree size
+                    # Calculate starting point for this sibling
+                    prev_siblings_weight = sum(w for _, w in sorted_siblings[:sibling_pos])
+                    sibling_start = prev_siblings_weight / total_weight
+                    sibling_end = (prev_siblings_weight + subtree_sizes[n]) / total_weight
+                    
+                    # Calculate angle within parent's subtree arc
+                    # Use the middle of this node's allocation
+                    angle_offset = (sibling_start + sibling_end) / 2 - 0.5
+                    
+                # Apply variable angular span based on depth
+                # Deeper nodes get a narrower angular range
+                max_arc = math.pi / (1 + d/2)  # Decreases with depth
+                
+                # Calculate final angle - parent angle plus offset
+                angle = parent_angle + angle_offset * max_arc
+                
+            # Set position using calculated angle and layer radius
             z[pi] = torch.tensor([layer_radius * math.cos(angle), layer_radius * math.sin(angle)])
-
-    # Clamp points to be strictly inside the disk
+    
+    # Ensure points are within the disk
     norms = z.norm(dim=1, keepdim=True)
-    z = torch.where(norms >= 0.995, z / norms * 0.995, z) # Use 0.995 for safety margin
+    z = torch.where(norms >= 0.995, z / norms * 0.995, z)
     return z
 
 # --------------------------
@@ -527,8 +656,22 @@ class HyperbolicKuramoto(nn.Module):
 # --------------------------
 
 def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-3, 
-          create_gif=False, gif_interval=50):
-    """Trains the Hyperbolic Kuramoto model."""
+          create_gif=False, gif_interval=50, 
+          early_stop_patience=500, early_stop_threshold=1e-4):
+    """Trains the Hyperbolic Kuramoto model with early stopping.
+    
+    Args:
+        tree: NetworkX tree graph
+        D_target: Target distance matrix
+        loss_type: Type of loss function to use
+        epochs: Maximum number of training epochs
+        lambda_reg: Regularization strength
+        lr: Learning rate
+        create_gif: Whether to create animated GIF of training
+        gif_interval: Interval for saving frames
+        early_stop_patience: Number of epochs to wait before checking for improvement
+        early_stop_threshold: Minimum relative improvement threshold to continue training
+    """
     N = len(tree.nodes())
     z0 = hierarchical_tree_init(tree, radius=0.8)
     I_target = hyperbolic_g(D_target) # Precompute target similarity if needed by loss
@@ -556,6 +699,11 @@ def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-
     
     loss_hist = []
     embeddings_history = [] # Store embeddings for GIF
+    
+    # Early stopping variables
+    best_loss = float('inf')
+    best_epoch = 0
+    no_improve_count = 0
 
     # Extract labels and colors for GIF function if needed
     labels = {node: data.get('label', str(node)) for node, data in tree.nodes(data=True)}
@@ -600,13 +748,6 @@ def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-
             total_loss = loss
             reg_loss = torch.tensor(0.0)  # Placeholder for logging
 
-        # Add universal boundary regularization
-        norm_sq = zf.pow(2).sum(-1)
-        # Use a small epsilon to prevent log(0)
-        reg_loss = -lambda_reg * torch.log(1 - norm_sq + 1e-8).sum() 
-        
-        total_loss = loss + reg_loss # Combine primary loss and regularization
-
         # Backpropagate the total loss
         total_loss.backward() 
         
@@ -619,7 +760,8 @@ def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-
         
         # Logging
         if ep % 500 == 0 or ep == epochs - 1:
-            print(f"[{loss_type}] Epoch {ep}: Base Loss={loss.item():.4f}, Reg Loss={reg_loss.item():.4f}, Total Loss={total_loss.item():.4f}") 
+            print(f"[{loss_type}] Epoch {ep}: Base Loss={loss.item():.4f}, "
+                  f"Reg Loss={reg_loss.item():.4f}, Total Loss={total_loss.item():.4f}") 
             
         # Store embedding state for GIF
         if create_gif and (ep % gif_interval == 0 or ep == epochs - 1):
@@ -632,16 +774,40 @@ def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-
             z_final_cpu = zf.detach().cpu()
             z_centered_np = mobius_centering(z_final_cpu, root_idx).numpy()
             embeddings_history.append(z_centered_np)
+        
+        # Early stopping check
+        current_loss = total_loss.item()
+        
+        # Check if this is the best loss so far
+        if current_loss < best_loss * (1 - early_stop_threshold):
+            # We've improved by at least the threshold
+            best_loss = current_loss
+            best_epoch = ep
+            no_improve_count = 0
+        else:
+            # Loss didn't improve enough
+            no_improve_count += 1
             
-        # Early stopping condition (optional)
-        if total_loss.item() < 1e-3: # Adjusted threshold
-             print(f"Early stopping at epoch {ep} with total loss {total_loss.item():.4f}")
-             # Ensure the last frame is added if stopping early
-             if create_gif and ep % gif_interval != 0:
-                 z_final_cpu = zf.detach().cpu()
-                 z_centered_np = mobius_centering(z_final_cpu, node_to_idx.get(root, 0)).numpy()
-                 embeddings_history.append(z_centered_np)
-             break 
+        # If we haven't seen improvement for patience epochs, stop training
+        if no_improve_count >= early_stop_patience and ep > 2000:  # Ensure minimum training
+            # Calculate relative change in loss over the patience window
+            if ep >= early_stop_patience:
+                window_start = max(0, len(loss_hist) - early_stop_patience)
+                window_end = len(loss_hist)
+                loss_window = loss_hist[window_start:window_end]
+                rel_change = abs(loss_window[0] - loss_window[-1]) / max(abs(loss_window[0]), 1e-8)
+                
+                if rel_change < early_stop_threshold:
+                    print(f"\nEarly stopping at epoch {ep}: No significant improvement "
+                          f"for {early_stop_patience} epochs (rel. change: {rel_change:.6f})")
+                    print(f"Best loss: {best_loss:.6f} at epoch {best_epoch}")
+                    
+                    # Add final state to GIF if needed
+                    if create_gif and ep % gif_interval != 0:
+                        z_final_cpu = zf.detach().cpu()
+                        z_centered_np = mobius_centering(z_final_cpu, root_idx).numpy()
+                        embeddings_history.append(z_centered_np)
+                    break
              
     # After the loop, create GIF if requested
     if create_gif and embeddings_history:
@@ -659,8 +825,62 @@ def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-
     return model, zf.detach().cpu(), loss_hist
 
 # --------------------------
-# 7. Visualization & GIF Creation
+# 7. Saving Data, Visualization & GIF Creation
 # --------------------------
+
+
+def export_metrics_to_csv(metrics_dict, loss_type, filename="embedding_metrics.csv"):
+    """
+    Exports evaluation metrics to a CSV file.
+    
+    Args:
+        metrics_dict: Dictionary containing all metrics
+        loss_type: The loss type used for this run
+        filename: Output CSV filename
+    """
+    import csv
+    import os
+    
+    # Define explanations for each metric
+    metric_explanations = {
+        "stress": "Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.",
+        "mrd": "Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.",
+        "accuracy": "Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).",
+        "precision": "Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.",
+        "recall": "Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.",
+        "f1": "Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.",
+        "roc_auc": "Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality."
+    }
+    
+    # Check if file exists to determine if we need to write headers
+    file_exists = os.path.isfile(filename)
+    
+    with open(filename, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        
+        # Write headers if file is new
+        if not file_exists:
+            headers = ['loss_type', 'metric', 'value', 'threshold', 'explanation']
+            writer.writerow(headers)
+        
+        # Write stress and MRD metrics
+        writer.writerow([loss_type, 'stress', f"{metrics_dict['stress']:.4f}", "N/A", metric_explanations['stress']])
+        writer.writerow([loss_type, 'mrd', f"{metrics_dict['mrd']:.4f}", "N/A", metric_explanations['mrd']])
+        
+        # Write threshold-based metrics
+        for eps in metrics_dict['thresholds']:
+            thresh_metrics = metrics_dict['thresholds'][eps]
+            for metric in ['accuracy', 'precision', 'recall', 'f1', 'roc_auc']:
+                writer.writerow([
+                    loss_type, 
+                    metric, 
+                    f"{thresh_metrics[metric]:.4f}", 
+                    eps,
+                    metric_explanations[metric]
+                ])
+    
+    print(f"Metrics saved to {filename}")
+
 
 def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown'):
     """Visualizes the original tree, embedding, and loss curve."""
@@ -775,28 +995,48 @@ def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown'):
     
     # --- Calculate and print metrics ---
     print(f"\n--- Evaluation Metrics ({loss_type.upper()}) ---")
+    
+    # Dictionary to hold all metrics for CSV export
+    all_metrics = {
+        'thresholds': {}
+    }
+    
     if D_target is not None:
         # Ensure D_target is on CPU for metric calculation if z_final is
-        D_target_cpu = D_target.cpu() 
-        print(f"Stress metric: {stress_metric(z_final, D_target_cpu):.4f}")
-        print(f"Mean relative distortion: {mean_relative_distortion(z_final, D_target_cpu):.4f}")
+        D_target_cpu = D_target.cpu()
+        stress_value = stress_metric(z_final, D_target_cpu)
+        mrd_value = mean_relative_distortion(z_final, D_target_cpu)
+        
+        all_metrics['stress'] = stress_value
+        all_metrics['mrd'] = mrd_value
+        
+        print(f"Stress metric: {stress_value:.4f}")
+        print(f"Mean relative distortion: {mrd_value:.4f}")
     else:
         print("D_target not provided, skipping stress and distortion metrics.")
+        all_metrics['stress'] = float('nan')
+        all_metrics['mrd'] = float('nan')
     
     # Calculate accuracy metrics
     # Recreate edge_index on CPU for metric function
     edge_index_cpu = torch.tensor([[node_to_idx[u], node_to_idx[v]] 
-                                   for u, v in tree.to_undirected().edges() 
-                                   if u in node_to_idx and v in node_to_idx]).t()
+                                  for u, v in tree.to_undirected().edges() 
+                                  if u in node_to_idx and v in node_to_idx]).t()
     
     if edge_index_cpu.numel() > 0: # Check if there are edges
-        for eps in [0.5, 1.0, 1.5, 2.0]: # Added more thresholds
+        for eps in [0.5, 1.0, 1.5, 2.0]:
             metrics = threshold_accuracy(z_final, edge_index_cpu, eps)
+            all_metrics['thresholds'][eps] = metrics
+            
             print(f"\nLink Prediction Metrics @ eps={eps}:")
             for k, v in metrics.items():
                 print(f"  {k}: {v:.4f}")
     else:
         print("No edges found to calculate link prediction metrics.")
+    
+    # Export all metrics to CSV
+    export_metrics_to_csv(all_metrics, loss_type)
+    
     print("-" * (28 + len(loss_type)))
 
 
@@ -875,13 +1115,21 @@ def create_embedding_gif(tree, embeddings_history, filename, node_to_idx, labels
 
 if __name__ == "__main__":
     # --- Configuration ---
-    MAX_DEPTH = 5       # Depth of the expression tree
+    SEED = 1             # Random seed for reproducibility
+    MAX_DEPTH = 5         # Depth of the expression tree
     VARIABLES = ['x', 'y'] # Variables in the expression
-    EPOCHS = 5_000       # Max training epochs per loss type
-    LEARNING_RATE = 5e-4 # Adjusted learning rate
-    LAMBDA_REG = 0.5     # Regularization strength (tune this)
-    CREATE_GIF = True   # Set to True to generate GIFs
-    GIF_INTERVAL = 100   # Save frame every 100 epochs for GIF
+    EPOCHS = 8_000        # Max training epochs per loss type
+    LEARNING_RATE = 5e-4  # Adjusted learning rate
+    LAMBDA_REG = 0.5      # Regularization strength (tune this)
+    CREATE_GIF = True     # Set to True to generate GIFs
+    GIF_INTERVAL = 100    # Save frame every 100 epochs for GIF
+    
+    # Early stopping parameters
+    EARLY_STOP_PATIENCE = 500  # Check improvement over this many epochs
+    EARLY_STOP_THRESHOLD = 1e-4  # Minimum relative improvement to continue
+    
+    # Set seeds for reproducibility
+    set_seed(SEED)
     
     # --- Generate Tree ---
     tree, graph_dists = generate_expression_tree_and_distances(
@@ -890,9 +1138,7 @@ if __name__ == "__main__":
     print(f"Generated Tree - Nodes: {len(tree.nodes())}, Edges: {len(tree.edges())}")
     
     # --- Train and Visualize for each loss type ---
-    # loss_types_to_run = ['mse', 'stress', 'binary', 'contrastive', 'triplet', 'nt_xent']
-    loss_types_to_run = ['hybrid']
-    
+    loss_types_to_run = ['mse', 'stress', 'binary', 'contrastive', 'triplet', 'nt_xent', 'hybrid']
     
     for lt in loss_types_to_run:
         print(f"\n{'='*15} Training with {lt.upper()} Loss {'='*15}")
@@ -905,7 +1151,9 @@ if __name__ == "__main__":
                 lambda_reg=LAMBDA_REG, 
                 lr=LEARNING_RATE,
                 create_gif=CREATE_GIF,
-                gif_interval=GIF_INTERVAL
+                gif_interval=GIF_INTERVAL,
+                early_stop_patience=EARLY_STOP_PATIENCE,
+                early_stop_threshold=EARLY_STOP_THRESHOLD
             )
             
             print(f"\n--- Final Results for {lt.upper()} Loss ---")
