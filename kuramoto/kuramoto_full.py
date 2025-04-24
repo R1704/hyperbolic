@@ -636,7 +636,7 @@ class HyperbolicKuramoto(nn.Module):
             term3 = (1 / (2 * self.N)) * T
             
             dz = term1 + term2 + term3
-            z_c = z_c + dt * dz
+            z_c = z_c + dt * dz  # <-- This is Euler integration
             
             # Projection back to disk
             absz = torch.abs(z_c)
@@ -708,8 +708,11 @@ def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-
     # Extract labels and colors for GIF function if needed
     labels = {node: data.get('label', str(node)) for node, data in tree.nodes(data=True)}
     color_map = {
-        'variable': '#4AA8FF', 'constant': '#50C878', 'function': '#FF6347', 
-        'operation': '#FFD700', 'other': '#A9A9A9'
+        'variable': '#4AA8FF', 
+        'constant': '#50C878', 
+        'function': '#FF6347', 
+        'operation': '#FFD700', 
+        'other': '#A9A9A9'
     }
     node_types = [tree.nodes[node].get('type', 'other') for node in node_list]
     node_colors = [color_map.get(t, '#A9A9A9') for t in node_types]
@@ -1144,7 +1147,7 @@ if __name__ == "__main__":
         print(f"\n{'='*15} Training with {lt.upper()} Loss {'='*15}")
         try:
             model, zf, lh = train(
-                tree, 
+                tree,  
                 graph_dists, 
                 loss_type=lt, 
                 epochs=EPOCHS, 

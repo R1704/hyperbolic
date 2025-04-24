@@ -343,3 +343,7 @@ output/
 # End of https://www.toptal.com/developers/gitignore/api/video,images
 
 *.json
+
+kuramoto_paper
+
+results
