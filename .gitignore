@@ -345,5 +345,6 @@ output/
 *.json
 
 kuramoto_paper
+kura_paper_v2
 
 results

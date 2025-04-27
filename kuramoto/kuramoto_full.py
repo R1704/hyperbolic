@@ -453,19 +453,67 @@ def mobius_centering(z, root_idx):
 # 4. Expression Tree + Init
 # --------------------------
 
-def generate_expression_tree_and_distances(max_depth=6, variables=None):
+def generate_expression_tree_and_distances(max_depth=6, variables=None, node_display='labels'):
     """Generates expression tree and computes graph distances."""
-    print("Generating expression tree…")
+    print(f"Generating expression tree with node display mode: {node_display}...")
     expr, tree = generate_and_visualize(max_depth=max_depth, variables=variables,
-                                        save_path="expression_tree.png", show=False)
+                                        save_path="results/expression_tree.png", show=False)
+
+    # If BFS numbering is requested, create and save a second visualization with BFS numbers
+    if node_display == 'bfs':
+        # Find the root node
+        roots = [n for n, d in tree.in_degree() if d == 0]
+        root = roots[0] if roots else list(tree.nodes())[0]
+        
+        # Generate BFS numbering
+        bfs_labels = {}
+        counter = 0
+        for node in nx.bfs_tree(tree.to_undirected(), root):
+            bfs_labels[node] = str(counter)
+            counter += 1
+            
+        # Create a direct NetworkX visualization with consistent colors
+        plt.figure(figsize=(10, 8))
+        
+        # Try to use the same layout as the original tree
+        try:
+            pos = nx.nx_agraph.graphviz_layout(tree, prog='dot')
+        except ImportError:
+            pos = nx.spring_layout(tree)
+        
+        # Use consistent color for all nodes
+        node_colors = ['black' for _ in tree.nodes()]  # Cornflower blue for all nodes
+        
+        # Draw the tree with BFS numbering and consistent colors
+        nx.draw(tree, pos, with_labels=True, labels=bfs_labels, 
+                node_color=node_colors, node_size=800, font_size=10,
+                font_weight='bold', arrows=True, arrowstyle='->', arrowsize=15,
+                edge_color='gray', font_color='white')
+                
+        plt.title("Expression Tree with BFS Numbering")
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig("results/expression_tree_bfs.png", dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"BFS-numbered tree saved as 'results/expression_tree_bfs.png'")
+
+    # Rest of the function remains unchanged
     G = tree.to_undirected()
     N = len(tree.nodes())
     # Ensure nodes are correctly indexed if they are strings like "node_i"
     node_list = list(tree.nodes())
     node_to_idx = {node: i for i, node in enumerate(node_list)}
-    
-    D = np.full((N, N), float(N)) # Initialize with large distance
-    np.fill_diagonal(D, 0) # Distance to self is 0
+
+    # Rest of the function remains unchanged
+    G = tree.to_undirected()
+    N = len(tree.nodes())
+    # Ensure nodes are correctly indexed if they are strings like "node_i"
+    node_list = list(tree.nodes())
+    node_to_idx = {node: i for i, node in enumerate(node_list)}
+
+    # Rest of the function remains the same...
+    D = np.full((N, N), float(N))  # Initialize with large distance
+    np.fill_diagonal(D, 0)  # Distance to self is 0
 
     for i in range(N):
         source_node = node_list[i]
@@ -476,7 +524,7 @@ def generate_expression_tree_and_distances(max_depth=6, variables=None):
                     j = node_to_idx[target_node]
                     D[i, j] = length
         except nx.NetworkXError:
-             print(f"Warning: Node {source_node} not found in undirected graph G.")
+            print(f"Warning: Node {source_node} not found in undirected graph G.")
 
     return tree, torch.tensor(D, dtype=torch.float32)
 
@@ -657,7 +705,8 @@ class HyperbolicKuramoto(nn.Module):
 
 def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-3, 
           create_gif=False, gif_interval=50, 
-          early_stop_patience=500, early_stop_threshold=1e-4):
+          early_stop_patience=500, early_stop_threshold=1e-4,
+          node_display='labels'):
     """Trains the Hyperbolic Kuramoto model with early stopping.
     
     Args:
@@ -706,16 +755,31 @@ def train(tree, D_target, loss_type='mse', epochs=10_000, lambda_reg=1.0, lr=1e-
     no_improve_count = 0
 
     # Extract labels and colors for GIF function if needed
-    labels = {node: data.get('label', str(node)) for node, data in tree.nodes(data=True)}
-    color_map = {
-        'variable': '#4AA8FF', 
-        'constant': '#50C878', 
-        'function': '#FF6347', 
-        'operation': '#FFD700', 
-        'other': '#A9A9A9'
-    }
-    node_types = [tree.nodes[node].get('type', 'other') for node in node_list]
-    node_colors = [color_map.get(t, '#A9A9A9') for t in node_types]
+    if node_display == 'bfs':
+        # Find the root node
+        root_candidates = [node for node, in_deg in tree.in_degree() if in_deg == 0]
+        root = root_candidates[0] if root_candidates else node_list[0]
+        
+        # Perform BFS and assign numbers
+        bfs_labels = {}
+        counter = 0
+        for node in nx.bfs_tree(tree.to_undirected(), root):
+            bfs_labels[node] = str(counter)
+            counter += 1
+            
+        labels = bfs_labels
+        # Use BLACK color for all nodes with BFS numbering
+        node_colors = ['black' for _ in node_list]
+    else:
+        # Use original labels and type-based colors
+        labels = {node: data.get('label', str(node)) for node, data in tree.nodes(data=True)}
+        node_types = [tree.nodes[node].get('type', 'other') for node in node_list]
+        color_map = {
+            'variable': '#4AA8FF', 'constant': '#50C878', 'function': '#FF6347', 
+            'operation': '#FFD700', 'other': '#A9A9A9'
+        }
+        node_colors = [color_map.get(t, '#A9A9A9') for t in node_types]
+
 
     for ep in range(epochs):
         optimizer.zero_grad()
@@ -885,20 +949,50 @@ def export_metrics_to_csv(metrics_dict, loss_type, filename="embedding_metrics.c
     print(f"Metrics saved to {filename}")
 
 
-def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown'):
+def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown', node_display='labels'):
     """Visualizes the original tree, embedding, and loss curve."""
     fig, ax = plt.subplots(1, 3, figsize=(24, 7)) # Wider figure
     
     # --- Get node attributes ---
     node_list = list(tree.nodes())
-    labels = {node: data.get('label', str(node)) for node, data in tree.nodes(data=True)}
-    node_types = [tree.nodes[node].get('type', 'other') for node in node_list]
-    color_map = {
-        'variable': '#4AA8FF', 'constant': '#50C878', 'function': '#FF6347', 
-        'operation': '#FFD700', 'other': '#A9A9A9'
-    }
-    node_colors = [color_map.get(t, '#A9A9A9') for t in node_types]
+    original_labels = {node: data.get('label', str(node)) for node, data in tree.nodes(data=True)}
+    
+    # Determine node colors based on display mode
+    if node_display == 'bfs':
+        # Use BLACK color for all nodes when using BFS numbering
+        node_colors = ['black' for _ in node_list]
+        print("Using black nodes with white text for BFS numbering")
+    else:
+        # Use type-based colors for regular labels
+        node_types = [tree.nodes[node].get('type', 'other') for node in node_list]
+        color_map = {
+            'variable': '#4AA8FF', 'constant': '#50C878', 'function': '#FF6347', 
+            'operation': '#FFD700', 'other': '#A9A9A9'
+        }
+        node_colors = [color_map.get(t, '#A9A9A9') for t in node_types]
+        
     node_to_idx = {node: i for i, node in enumerate(node_list)}
+
+    # Generate BFS numbering if needed
+    if node_display == 'bfs':
+        # Find the root node
+        root_candidates = [node for node, in_deg in tree.in_degree() if in_deg == 0]
+        root = root_candidates[0] if root_candidates else node_list[0]
+        
+        # Perform BFS and assign numbers
+        bfs_labels = {}
+        counter = 0
+        for node in nx.bfs_tree(tree.to_undirected(), root):
+            bfs_labels[node] = str(counter)
+            counter += 1
+        
+        # Use BFS numbers as labels
+        labels = bfs_labels
+        print(f"Using BFS node numbering (root: {root})")
+    else:
+        # Use original labels (operators)
+        labels = original_labels
+        print(f"Using original node labels")
 
     # --- (a) Original tree visualization ---
     try:
@@ -907,7 +1001,7 @@ def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown'):
         nx.draw(tree, pos, ax=ax[0], with_labels=True, labels=labels, 
                 node_color=node_colors, node_size=800, font_size=10,
                 font_weight='bold', arrows=True, arrowstyle='->', arrowsize=15,
-                edge_color='gray')
+                edge_color='gray', font_color='white' if node_display == 'bfs' else 'black')
         ax[0].set_title("Original Expression Tree")
     except ImportError:
         print("Warning: pygraphviz not found. Using default NetworkX layout for original tree.")
@@ -915,7 +1009,7 @@ def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown'):
         nx.draw(tree, pos, ax=ax[0], with_labels=True, labels=labels, 
                 node_color=node_colors, node_size=800, font_size=10,
                 font_weight='bold', arrows=True, arrowstyle='->', arrowsize=15,
-                edge_color='gray')
+                edge_color='gray', font_color='white' if node_display == 'bfs' else 'black')
         ax[0].set_title("Original Expression Tree (Spring Layout)")
     ax[0].axis('off') # Hide axes for tree plot
 
@@ -968,13 +1062,21 @@ def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown'):
     
     # Plot nodes
     ax[1].scatter(z_np[:, 0], z_np[:, 1], c=node_colors, s=150, edgecolor='black', linewidth=0.5, zorder=10, alpha=0.9)
-    # Add text labels
+    
+    # Add text labels (MOVED THIS SECTION after z_np is defined)
     for i, node in enumerate(node_list):
         label = labels.get(node, '?')
+        text_color = 'white' if node_display == 'bfs' else 'black'
+        
+        # Only use transparent background for BFS mode with black nodes
+        if node_display == 'bfs':
+            bg_dict = dict(facecolor='none', alpha=0, edgecolor='none', boxstyle='round,pad=0.2')
+        else:
+            bg_dict = dict(facecolor='white', alpha=0.75, edgecolor='none', boxstyle='round,pad=0.2')
+            
         ax[1].text(z_np[i, 0], z_np[i, 1], label, 
-                   fontsize=9, ha='center', va='center', color='black',
-                   bbox=dict(facecolor='white', alpha=0.75, edgecolor='none', boxstyle='round,pad=0.2'),
-                   zorder=20) 
+                fontsize=9, ha='center', va='center', color=text_color,
+                bbox=bg_dict, zorder=20)
     
     ax[1].set_aspect('equal')
     ax[1].set_title(f"Hyperbolic Embedding ({loss_type.upper()})")
@@ -991,7 +1093,7 @@ def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown'):
     
     plt.tight_layout(pad=1.5)
     # Save figure with loss type in filename
-    save_filename = f"embedding_result_{loss_type}.png"
+    save_filename = f"results/embedding_result_{loss_type}.png"
     plt.savefig(save_filename, dpi=300, bbox_inches='tight') 
     print(f"Visualization saved to {save_filename}")
     plt.show()
@@ -1044,13 +1146,26 @@ def visualize(tree, z_final, loss_hist, D_target=None, loss_type='unknown'):
 
 
 def create_embedding_gif(tree, embeddings_history, filename, node_to_idx, labels, node_colors, interval):
-    """Creates a GIF from the embedding history."""
+    """Creates a GIF from the embedding history.
+    
+    Args:
+        tree: NetworkX tree graph
+        embeddings_history: List of embedding arrays at different epochs
+        filename: Path to save the GIF file
+        node_to_idx: Mapping from node names to indices
+        labels: Dictionary mapping nodes to display labels
+        node_colors: List of colors for each node
+        interval: Epoch interval between frames
+    """
     print(f"Creating GIF: {filename}...")
     frames = []
     temp_dir = "temp_gif_frames"
     os.makedirs(temp_dir, exist_ok=True)
     
     node_list = list(tree.nodes()) # Ensure consistent node order
+    
+    # Determine if we're using BFS mode based on colors (all black means BFS)
+    is_bfs_mode = all(color == 'black' for color in node_colors)
 
     for idx, z_np in enumerate(embeddings_history):
         fig, ax = plt.subplots(figsize=(8, 8))
@@ -1059,9 +1174,9 @@ def create_embedding_gif(tree, embeddings_history, filename, node_to_idx, labels
         circle = plt.Circle((0, 0), 1, color='gray', fill=False, ls='--', alpha=0.7)
         ax.add_artist(circle)
         for r in np.linspace(0.2, 0.8, 4):
-             ax.add_patch(plt.Circle((0, 0), r, fill=False, color='lightgray', ls='--', alpha=0.4))
+            ax.add_patch(plt.Circle((0, 0), r, fill=False, color='lightgray', ls='--', alpha=0.4))
 
-        # Draw simple lines for edges (faster for GIF)
+        # Draw edges (simple lines for faster GIF rendering)
         for u, v in tree.to_undirected().edges():
             if u in node_to_idx and v in node_to_idx:
                 i, j = node_to_idx[u], node_to_idx[v]
@@ -1071,28 +1186,45 @@ def create_embedding_gif(tree, embeddings_history, filename, node_to_idx, labels
                             color='darkgray', lw=0.6, alpha=0.7) 
 
         # Draw nodes
-        ax.scatter(z_np[:, 0], z_np[:, 1], c=node_colors, s=120, edgecolor='black', lw=0.5, zorder=10, alpha=0.9)
-        # Add text labels
+        ax.scatter(z_np[:, 0], z_np[:, 1], c=node_colors, s=120, edgecolor='black', 
+                   lw=0.5, zorder=10, alpha=0.9)
+        
+        # Add text labels with appropriate colors based on mode
         for i, node in enumerate(node_list):
-             if i < len(z_np): # Check bounds
-                 label = labels.get(node, '?')
-                 ax.text(z_np[i, 0], z_np[i, 1], label, fontsize=9, ha='center', va='center', 
-                         bbox=dict(facecolor='white', alpha=0.75, edgecolor='none', boxstyle='round,pad=0.2'), zorder=20)
+            if i < len(z_np): # Check bounds
+                label = labels.get(node, '?')
+                
+                # Set text and background colors based on mode
+                if is_bfs_mode:
+                    # BFS mode: White text on black nodes (no background)
+                    text_color = 'white'
+                    bg_dict = dict(facecolor='none', alpha=0, edgecolor='none', 
+                                  boxstyle='round,pad=0.2')
+                else:
+                    # Normal mode: Black text with white background
+                    text_color = 'black'
+                    bg_dict = dict(facecolor='white', alpha=0.75, edgecolor='none', 
+                                  boxstyle='round,pad=0.2')
+                
+                ax.text(z_np[i, 0], z_np[i, 1], label, fontsize=9, ha='center', va='center', 
+                        color=text_color, bbox=bg_dict, zorder=20)
 
+        # Finalize the plot
         ax.set_aspect('equal')
         ax.set_title(f"Epoch {idx * interval}") # Display correct epoch number
         ax.set_xlim([-1.1, 1.1]); ax.set_ylim([-1.1, 1.1])
         ax.axis('off') # Clean frame
 
+        # Save the frame
         frame_path = os.path.join(temp_dir, f"frame_{idx:04d}.png")
         plt.savefig(frame_path, dpi=100, bbox_inches='tight')
         plt.close(fig)
-        # Append frame data directly
+        
+        # Append frame data
         try:
-             frames.append(imageio.imread(frame_path))
+            frames.append(imageio.imread(frame_path))
         except FileNotFoundError:
-             print(f"Warning: Frame file not found: {frame_path}")
-
+            print(f"Warning: Frame file not found: {frame_path}")
 
     # Save GIF if frames were generated
     if frames:
@@ -1111,7 +1243,6 @@ def create_embedding_gif(tree, embeddings_history, filename, node_to_idx, labels
         os.rmdir(temp_dir)
     except OSError as e:
         print(f"Error cleaning up temp frames: {e}")
-
 # --------------------------
 # 8. Main Execution
 # --------------------------
@@ -1126,6 +1257,7 @@ if __name__ == "__main__":
     LAMBDA_REG = 0.5      # Regularization strength (tune this)
     CREATE_GIF = True     # Set to True to generate GIFs
     GIF_INTERVAL = 100    # Save frame every 100 epochs for GIF
+    NODE_DISPLAY = 'bfs'  # 'labels' for operators or 'bfs' for BFS numbering
     
     # Early stopping parameters
     EARLY_STOP_PATIENCE = 500  # Check improvement over this many epochs
@@ -1136,12 +1268,15 @@ if __name__ == "__main__":
     
     # --- Generate Tree ---
     tree, graph_dists = generate_expression_tree_and_distances(
-        max_depth=MAX_DEPTH, variables=VARIABLES
+        max_depth=MAX_DEPTH,
+        variables=VARIABLES,
+        node_display=NODE_DISPLAY  # Pass the node display parameter
     )
     print(f"Generated Tree - Nodes: {len(tree.nodes())}, Edges: {len(tree.edges())}")
     
     # --- Train and Visualize for each loss type ---
-    loss_types_to_run = ['mse', 'stress', 'binary', 'contrastive', 'triplet', 'nt_xent', 'hybrid']
+    # loss_types_to_run = ['mse', 'stress', 'binary', 'contrastive', 'triplet', 'nt_xent', 'hybrid']
+    loss_types_to_run = ['mse', 'hybrid']
     
     for lt in loss_types_to_run:
         print(f"\n{'='*15} Training with {lt.upper()} Loss {'='*15}")
@@ -1156,7 +1291,8 @@ if __name__ == "__main__":
                 create_gif=CREATE_GIF,
                 gif_interval=GIF_INTERVAL,
                 early_stop_patience=EARLY_STOP_PATIENCE,
-                early_stop_threshold=EARLY_STOP_THRESHOLD
+                early_stop_threshold=EARLY_STOP_THRESHOLD,
+                node_display=NODE_DISPLAY
             )
             
             print(f"\n--- Final Results for {lt.upper()} Loss ---")
@@ -1165,7 +1301,8 @@ if __name__ == "__main__":
                 zf, 
                 lh, 
                 graph_dists, 
-                loss_type=lt
+                loss_type=lt,
+                node_display=NODE_DISPLAY  # Pass the node display option
             )
         except Exception as e:
             print(f"\n!!!!!! ERROR during training/visualization for {lt.upper()} loss !!!!!!")

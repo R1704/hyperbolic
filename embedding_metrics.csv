@@ -1,0 +1,199 @@
+loss_type,metric,value,threshold,explanation
+mse,stress,0.1493,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+mse,mrd,0.2685,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+mse,accuracy,0.9000,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+mse,precision,0.0000,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+mse,recall,0.0000,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+mse,f1,0.0000,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+mse,roc_auc,1.0000,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+mse,accuracy,0.9368,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+mse,precision,1.0000,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+mse,recall,0.3684,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+mse,f1,0.5385,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+mse,roc_auc,1.0000,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+mse,accuracy,0.9947,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+mse,precision,0.9500,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+mse,recall,1.0000,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+mse,f1,0.9744,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+mse,roc_auc,1.0000,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+mse,accuracy,0.8579,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+mse,precision,0.4130,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+mse,recall,1.0000,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+mse,f1,0.5846,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+mse,roc_auc,1.0000,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+stress,stress,0.0016,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+stress,mrd,0.0513,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+stress,accuracy,0.9000,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+stress,precision,0.0000,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+stress,recall,0.0000,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+stress,f1,0.0000,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+stress,roc_auc,0.9942,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+stress,accuracy,0.8947,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+stress,precision,0.0000,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+stress,recall,0.0000,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+stress,f1,0.0000,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+stress,roc_auc,0.9942,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+stress,accuracy,0.9947,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+stress,precision,0.9500,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+stress,recall,1.0000,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+stress,f1,0.9744,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+stress,roc_auc,0.9942,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+stress,accuracy,0.9526,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+stress,precision,0.6786,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+stress,recall,1.0000,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+stress,f1,0.8085,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+stress,roc_auc,0.9942,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+binary,stress,0.5285,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+binary,mrd,0.7366,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+binary,accuracy,0.7789,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+binary,precision,0.2444,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+binary,recall,0.5789,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+binary,f1,0.3438,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+binary,roc_auc,0.8107,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+binary,accuracy,0.8053,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+binary,precision,0.3333,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+binary,recall,0.9474,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+binary,f1,0.4932,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+binary,roc_auc,0.8107,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+binary,accuracy,0.3526,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+binary,precision,0.1286,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+binary,recall,0.9474,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+binary,f1,0.2264,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+binary,roc_auc,0.8107,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+binary,accuracy,0.2684,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+binary,precision,0.1154,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+binary,recall,0.9474,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+binary,f1,0.2057,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+binary,roc_auc,0.8107,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+contrastive,stress,0.7403,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+contrastive,mrd,0.8881,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+contrastive,accuracy,0.5263,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+contrastive,precision,0.1682,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+contrastive,recall,0.9474,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+contrastive,f1,0.2857,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+contrastive,roc_auc,0.8726,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+contrastive,accuracy,0.1895,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+contrastive,precision,0.1053,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+contrastive,recall,0.9474,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+contrastive,f1,0.1895,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+contrastive,roc_auc,0.8726,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+contrastive,accuracy,0.1895,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+contrastive,precision,0.1053,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+contrastive,recall,0.9474,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+contrastive,f1,0.1895,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+contrastive,roc_auc,0.8726,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+contrastive,accuracy,0.1895,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+contrastive,precision,0.1053,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+contrastive,recall,0.9474,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+contrastive,f1,0.1895,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+contrastive,roc_auc,0.8726,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+triplet,stress,0.8065,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+triplet,mrd,0.9352,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+triplet,accuracy,0.2316,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+triplet,precision,0.1104,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+triplet,recall,0.9474,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+triplet,f1,0.1978,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+triplet,roc_auc,0.8997,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+triplet,accuracy,0.1895,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+triplet,precision,0.1053,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+triplet,recall,0.9474,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+triplet,f1,0.1895,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+triplet,roc_auc,0.8997,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+triplet,accuracy,0.1895,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+triplet,precision,0.1053,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+triplet,recall,0.9474,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+triplet,f1,0.1895,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+triplet,roc_auc,0.8997,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+triplet,accuracy,0.1895,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+triplet,precision,0.1053,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+triplet,recall,0.9474,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+triplet,f1,0.1895,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+triplet,roc_auc,0.8997,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+nt_xent,stress,0.7013,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+nt_xent,mrd,0.8593,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+nt_xent,accuracy,0.6263,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+nt_xent,precision,0.1977,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+nt_xent,recall,0.8947,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+nt_xent,f1,0.3238,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+nt_xent,roc_auc,0.8717,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+nt_xent,accuracy,0.1895,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+nt_xent,precision,0.1053,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+nt_xent,recall,0.9474,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+nt_xent,f1,0.1895,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+nt_xent,roc_auc,0.8717,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+nt_xent,accuracy,0.1895,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+nt_xent,precision,0.1053,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+nt_xent,recall,0.9474,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+nt_xent,f1,0.1895,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+nt_xent,roc_auc,0.8717,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+nt_xent,accuracy,0.1895,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+nt_xent,precision,0.1053,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+nt_xent,recall,0.9474,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+nt_xent,f1,0.1895,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+nt_xent,roc_auc,0.8717,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+hybrid,stress,0.0015,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+hybrid,mrd,0.0477,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+hybrid,accuracy,0.9000,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+hybrid,precision,0.0000,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+hybrid,recall,0.0000,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+hybrid,f1,0.0000,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+hybrid,roc_auc,0.9997,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+hybrid,accuracy,0.9000,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+hybrid,precision,0.0000,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+hybrid,recall,0.0000,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+hybrid,f1,0.0000,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+hybrid,roc_auc,0.9997,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+hybrid,accuracy,0.9947,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+hybrid,precision,0.9500,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+hybrid,recall,1.0000,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+hybrid,f1,0.9744,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+hybrid,roc_auc,0.9997,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+hybrid,accuracy,0.9632,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+hybrid,precision,0.7308,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+hybrid,recall,1.0000,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+hybrid,f1,0.8444,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+hybrid,roc_auc,0.9997,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+mse,stress,0.1493,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+mse,mrd,0.2685,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+mse,accuracy,0.9000,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+mse,precision,0.0000,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+mse,recall,0.0000,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+mse,f1,0.0000,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+mse,roc_auc,1.0000,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+mse,accuracy,0.9368,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+mse,precision,1.0000,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+mse,recall,0.3684,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+mse,f1,0.5385,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+mse,roc_auc,1.0000,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+mse,accuracy,0.9947,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+mse,precision,0.9500,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+mse,recall,1.0000,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+mse,f1,0.9744,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+mse,roc_auc,1.0000,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+mse,accuracy,0.8579,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+mse,precision,0.4130,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+mse,recall,1.0000,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+mse,f1,0.5846,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+mse,roc_auc,1.0000,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+hybrid,stress,0.0015,N/A,Normalized stress between embedded distances and target distances (lower is better). Measures how well the embedding preserves the original graph distances.
+hybrid,mrd,0.0481,N/A,Mean Relative Distortion - average relative error in distance preservation (lower is better). Indicates the average relative error in pairwise distances.
+hybrid,accuracy,0.9000,0.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+hybrid,precision,0.0000,0.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+hybrid,recall,0.0000,0.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+hybrid,f1,0.0000,0.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+hybrid,roc_auc,0.9997,0.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+hybrid,accuracy,0.9000,1.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+hybrid,precision,0.0000,1.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+hybrid,recall,0.0000,1.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+hybrid,f1,0.0000,1.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+hybrid,roc_auc,0.9997,1.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+hybrid,accuracy,0.9947,1.5,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+hybrid,precision,0.9500,1.5,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+hybrid,recall,1.0000,1.5,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+hybrid,f1,0.9744,1.5,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+hybrid,roc_auc,0.9997,1.5,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
+hybrid,accuracy,0.9684,2.0,Fraction of correctly classified edges vs. non-edges at the given threshold (higher is better).
+hybrid,precision,0.7600,2.0,Fraction of predicted edges that are actual edges (higher is better). Measures the quality of positive predictions.
+hybrid,recall,1.0000,2.0,Fraction of actual edges that are correctly predicted (higher is better). Measures the completeness of positive predictions.
+hybrid,f1,0.8636,2.0,Harmonic mean of precision and recall (higher is better). Balanced measure of prediction quality.
+hybrid,roc_auc,0.9997,2.0,Area Under ROC Curve - probability that a random edge is ranked higher than a random non-edge (higher is better). Measures ranking quality.
